@@ -1,7 +1,7 @@
 // src/services/email.service.js
 
 const nodemailer = require('nodemailer');
-const config = require('../config/email.config');
+const emailConfig = require('../config/email.config');
 const { AppError } = require('../utils/error-handler');
 const logger = require('../infrastructure/logging/logger');
 
@@ -29,7 +29,7 @@ class EmailService {
 	 */
 	async sendEmail(emailData) {
 		try {
-			const { to, from = config.defaultFrom, subject, text, html, attachments } = emailData;
+			const { to, from = emailConfig.config.from.email, subject, text, html, attachments } = emailData;
 
 			if (!to || !subject || (!text && !html)) {
 				throw new AppError('Missing required email fields', 400);
@@ -104,7 +104,7 @@ class EmailService {
 			});
 		}
 
-		const subject = `Order Confirmation #${order.orderNumber} - ${config.businessName}`;
+		const subject = `Order Confirmation #${order.orderNumber} - ${emailConfig.config.from.name}`;
 		const text = this._generateOrderConfirmationText(order, client);
 
 		return this.sendEmail({
@@ -128,7 +128,7 @@ class EmailService {
 			return null;
 		}
 
-		const subject = `Delivery Update for Order #${order.orderNumber} - ${config.businessName}`;
+		const subject = `Delivery Update for Order #${order.orderNumber} - ${emailConfig.config.from.name}`;
 		const text = this._generateDeliveryNotificationText(delivery, order);
 
 		return this.sendEmail({
@@ -146,20 +146,20 @@ class EmailService {
 	 * @returns {Promise<Object>} Send result
 	 */
 	async sendPasswordReset(user, resetToken, resetUrl) {
-		const subject = `Password Reset - ${config.businessName}`;
+		const subject = `Password Reset - ${emailConfig.config.from.name}`;
 		const text = `
-      Hello ${user.fullName},
+    Hello ${user.fullName},
 
-      You requested a password reset. Please use the following link to reset your password:
-      ${resetUrl}?token=${resetToken}
+  You requested a password reset. Please use the following link to reset your password:
+  ${resetUrl}?token=${resetToken}
 
-      This link will expire in 1 hour.
+  This link will expire in 1 hour.
 
-      If you did not request this, please ignore this email and your password will remain unchanged.
+  If you did not request this, please ignore this email and your password will remain unchanged.
 
-      Regards,
-      ${config.businessName} Team
-    `;
+  Regards,
+  ${emailConfig.config.from.name} Team
+  `;
 
 		return this.sendEmail({
 			to: user.email,
@@ -175,26 +175,24 @@ class EmailService {
 	 */
 	_createTransporter() {
 		// For development, use a test account or ethereal
-		if (config.useTestAccount) {
-			return nodemailer.createTransport({
-				host: 'smtp.ethereal.email',
-				port: 587,
-				secure: false,
-				auth: {
-					user: config.auth.user,
-					pass: config.auth.pass
+		if (emailConfig.config.logOnly) {
+			// Create a mock transporter that just logs emails
+			return {
+				sendMail: (mailOptions) => {
+					logger.info('Mock email sent:', JSON.stringify(mailOptions, null, 2));
+					return Promise.resolve({ messageId: `mock-${Date.now()}` });
 				}
-			});
+			};
 		}
 
 		// For production
 		return nodemailer.createTransport({
-			host: config.host,
-			port: config.port,
-			secure: config.secure,
+			host: emailConfig.config.host,
+			port: emailConfig.config.port,
+			secure: emailConfig.config.secure,
 			auth: {
-				user: config.auth.user,
-				pass: config.auth.pass
+				user: emailConfig.config.auth.user,
+				pass: emailConfig.config.auth.pass
 			}
 		});
 	}
@@ -211,49 +209,51 @@ class EmailService {
 		const items = order.items.map(item => `${item.quantity} x ${item.product.name} - ₦${item.price * item.quantity}`).join('\n    ');
 
 		return `
-      Hello ${client.name},
+    Hello ${client.name},
 
-      Thank you for your order with ${config.businessName}!
+  Thank you for your order with ${emailConfig.config.from.name}!
 
-      Order Details:
-      --------------
-      Order Number: ${order.orderNumber}
-      Date: ${date}
-      Delivery Method: ${order.deliveryMethod}
-      
-      Items:
-      ------
-      ${items}
-      
-      Subtotal: ₦${order.subtotal}
-      ${order.deliveryFee ? `Delivery Fee: ₦${order.deliveryFee}` : ''}
-      ${order.discount ? `Discount: ₦${order.discount}` : ''}
-      Total: ₦${order.totalAmount}
-      
-      ${order.deliveryMethod === 'delivery' ? `
-      Delivery Address:
-      ----------------
-      ${order.deliveryAddress.street}
-      ${order.deliveryAddress.city}, ${order.deliveryAddress.state}
-      ${order.deliveryAddress.country}
-      ` : `
-      Pickup Information:
-      ------------------
-      You can pick up your order at our location.
-      `}
-      
-      Payment Information:
-      -------------------
-      Please transfer the total amount to:
-      Bank: ${config.bankDetails.bankName}
-      Account Number: ${config.bankDetails.accountNumber}
-      Account Name: ${config.bankDetails.accountName}
-      
-      Thank you for shopping with us!
-      
-      Regards,
-      ${config.businessName} Team
-    `;
+  ## Order Details:
+
+  Order Number: ${order.orderNumber}
+  Date: ${date}
+  Delivery Method: ${order.deliveryMethod}
+
+  ## Items:
+
+  ${items}
+
+  Subtotal: ₦${order.subtotal}
+  ${order.deliveryFee ? `Delivery Fee: ₦${order.deliveryFee}` : ''}
+  ${order.discount ? `Discount: ₦${order.discount}` : ''}
+  Total: ₦${order.totalAmount}
+
+  ${order.deliveryMethod === 'delivery' ? `
+  Delivery Address:
+  -----------------
+
+  ${order.deliveryAddress.street}
+  ${order.deliveryAddress.city}, ${order.deliveryAddress.state}
+  ${order.deliveryAddress.country}
+  `:`
+  Pickup Information:
+  -------------------
+
+  You can pick up your order at our location.
+  `}
+
+  ## Payment Information:
+
+  Please transfer the total amount to:
+  Bank: ${process.env.BANK_NAME || 'Your Bank'}
+  Account Number: ${process.env.ACCOUNT_NUMBER || 'Your Account Number'}
+  Account Name: ${process.env.ACCOUNT_NAME || 'Your Account Name'}
+
+  Thank you for shopping with us!
+
+  Regards,
+  ${emailConfig.config.from.name} Team
+  `;
 	}
 
 	/**
@@ -284,24 +284,23 @@ class EmailService {
 		}
 
 		return `
-      Hello,
+    Hello,
 
-      Update on your order #${order.orderNumber}:
-      
-      ${statusMessage}
-      
-      ${delivery.scheduledDate ? `
-      Scheduled delivery date: ${new Date(delivery.scheduledDate).toLocaleDateString()}
-      ${delivery.timeSlot ? `Time slot: ${delivery.timeSlot}` : ''}
-      ` : ''}
-      
-      ${delivery.notes ? `Additional Notes: ${delivery.notes}` : ''}
-      
-      If you have any questions, please contact us.
+  Update on your order #${order.orderNumber}:
 
-      Regards,
-      ${config.businessName} Team
-    `;
+  ${statusMessage}
+
+  ${delivery.scheduledDate ? `   Scheduled delivery date: ${new Date(delivery.scheduledDate).toLocaleDateString()}
+     ${delivery.timeSlot ?`Time slot: ${delivery.timeSlot}`: ''}
+    ` : ''}
+
+  ${delivery.notes ? `Additional Notes: ${delivery.notes}` : ''}
+
+  If you have any questions, please contact us.
+
+  Regards,
+  ${emailConfig.config.from.name} Team
+  `;
 	}
 
 	/**
@@ -319,18 +318,18 @@ class EmailService {
 		switch (template) {
 			case 'order-confirmation':
 				content = `
-          <h1>Order Confirmation</h1>
-          <p>Dear ${data.clientName},</p>
-          <p>Thank you for your order #${data.orderNumber}.</p>
-          <p>Total: ₦${data.total}</p>
-        `;
+       <h1>Order Confirmation</h1>
+       <p>Dear ${data.clientName},</p>
+       <p>Thank you for your order #${data.orderNumber}.</p>
+       <p>Total: ₦${data.total}</p>
+     `;
 				break;
 			case 'password-reset':
 				content = `
-          <h1>Password Reset</h1>
-          <p>Dear ${data.userName},</p>
-          <p>Click <a href="${data.resetUrl}">here</a> to reset your password.</p>
-        `;
+       <h1>Password Reset</h1>
+       <p>Dear ${data.userName},</p>
+       <p>Click <a href="${data.resetUrl}">here</a> to reset your password.</p>
+     `;
 				break;
 			default:
 				content = '<p>No template content available.</p>';

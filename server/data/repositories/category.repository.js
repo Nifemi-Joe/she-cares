@@ -17,7 +17,20 @@ class CategoryRepository extends BaseRepository {
 	 * Initialize category repository
 	 */
 	constructor() {
-		super('categories', CategorySchema);
+		super(CategorySchema, console);
+	}
+
+	/**
+	 * Find all categories
+	 * @returns {Promise<Array<Category>>} List of all categories
+	 */
+	async findAll() {
+		try {
+			const categories = await this.model.find({}).exec();
+			return categories.map(category => this._toModel(category));
+		} catch (error) {
+			throw new DatabaseError(`Error finding all categories: ${error.message}`);
+		}
 	}
 
 	/**
@@ -27,7 +40,7 @@ class CategoryRepository extends BaseRepository {
 	 */
 	async findByName(name) {
 		try {
-			const category = await this.collection.findOne({
+			const category = await this.model.findOne({
 				name: { $regex: new RegExp(`^${name}$`, 'i') }
 			});
 			return category ? this._toModel(category) : null;
@@ -42,12 +55,13 @@ class CategoryRepository extends BaseRepository {
 	 */
 	async findActiveCategories() {
 		try {
-			const categories = await this.collection.find({ isActive: true }).toArray();
+			const categories = await this.model.find({ isActive: true }).exec();
 			return categories.map(category => this._toModel(category));
 		} catch (error) {
 			throw new DatabaseError(`Error finding active categories: ${error.message}`);
 		}
 	}
+
 
 	/**
 	 * Find categories by parent ID
@@ -56,12 +70,13 @@ class CategoryRepository extends BaseRepository {
 	 */
 	async findByParent(parentId = null) {
 		try {
-			const categories = await this.collection.find({ parentId }).toArray();
+			const categories = await this.model.find({ parentId }).exec();
 			return categories.map(category => this._toModel(category));
 		} catch (error) {
 			throw new DatabaseError(`Error finding categories by parent: ${error.message}`);
 		}
 	}
+
 
 	/**
 	 * Get category tree (hierarchical structure)

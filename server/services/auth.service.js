@@ -70,7 +70,7 @@ class AuthService {
 
 		// Generate JWT token
 		const token = this._generateToken(user);
-
+		console.log(user)
 		return {
 			token,
 			user: this._sanitizeUser(user)
@@ -87,6 +87,7 @@ class AuthService {
 		if (!user) {
 			throw new NotFoundError('User not found');
 		}
+		console.log(user)
 		return this._sanitizeUser(user);
 	}
 

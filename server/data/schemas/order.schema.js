@@ -193,31 +193,45 @@ OrderSchema.virtual('invoice', {
 
 // Calculate totals before saving
 OrderSchema.pre('save', function(next) {
-	// Calculate item total prices if not set
-	this.items.forEach(item => {
-		if (!item.totalPrice) {
-			item.totalPrice = item.price * item.quantity;
+	try {
+		// Ensure orderNumber exists
+		if (!this.orderNumber) {
+			this.orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 		}
-	});
 
-	// Calculate subtotal from items
-	if (!this.subtotal) {
-		this.subtotal = this.items.reduce((sum, item) => sum + item.totalPrice, 0);
-	}
-
-	// Calculate total amount
-	this.totalAmount = this.subtotal + this.shippingCost + this.taxAmount - this.discountAmount;
-
-	// Add to status history if status changed
-	if (this.isModified('status')) {
-		this.statusHistory.push({
-			status: this.status,
-			timestamp: new Date(),
-			note: 'Status updated'
+		// Calculate item total prices if not set
+		this.items.forEach(item => {
+			if (!item.totalPrice) {
+				item.totalPrice = item.price * item.quantity;
+			}
 		});
-	}
 
-	next();
+		// Calculate subtotal from items
+		if (!this.subtotal || this.subtotal === 0) {
+			this.subtotal = this.items.reduce((sum, item) => sum + item.totalPrice, 0);
+		}
+
+		// Ensure numeric values are set
+		this.shippingCost = this.shippingCost || 0;
+		this.taxAmount = this.taxAmount || 0;
+		this.discountAmount = this.discountAmount || 0;
+
+		// Calculate total amount
+		this.totalAmount = this.subtotal + this.shippingCost + this.taxAmount - this.discountAmount;
+
+		// Add to status history if status changed or if this is new document
+		if (this.isModified('status') || this.isNew) {
+			this.statusHistory.push({
+				status: this.status,
+				timestamp: new Date(),
+				note: this.isNew ? 'Order created' : 'Status updated'
+			});
+		}
+
+		next();
+	} catch (error) {
+		next(error);
+	}
 });
 
 /**

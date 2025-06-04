@@ -15,8 +15,6 @@ const userValidator = require('../../domain/validators/user.validator');
  */
 router.post(
 	'/register',
-	verifyToken,
-	requireAdmin,
 	validate(userValidator.registerSchema),
 	authController.register
 );

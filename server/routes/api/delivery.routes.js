@@ -15,7 +15,7 @@ const { verifyToken, requireAdmin } = require('../middleware/auth.middleware');
  */
 router.post('/',
 	verifyToken,
-	validate(deliveryValidator.createDeliverySchema),
+	validate(deliveryValidator.validateCreate),
 	deliveryController.createDelivery
 );
 
@@ -45,7 +45,7 @@ router.get('/:id',
  */
 router.put('/:id/status',
 	verifyToken,
-	validate(deliveryValidator.updateDeliveryStatusSchema),
+	validate(deliveryValidator.validateStatusTransition),
 	deliveryController.updateDeliveryStatus
 );
 
@@ -56,7 +56,7 @@ router.put('/:id/status',
  */
 router.put('/:id',
 	verifyToken,
-	validate(deliveryValidator.updateDeliverySchema),
+	validate(deliveryValidator.validateUpdate),
 	deliveryController.updateDelivery
 );
 
@@ -85,8 +85,8 @@ router.get('/order/:orderId',
  * @access Public
  */
 router.post('/track',
-	validate(deliveryValidator.trackDeliverySchema),
-	deliveryController.trackDelivery
+	// validate(deliveryValidator.),
+	deliveryController.getDeliveryById
 );
 
 /**
@@ -114,31 +114,30 @@ router.get('/scheduled',
  * @desc Add delivery note
  * @access Private
  */
-router.post('/:id/notes',
-	verifyToken,
-	validate(deliveryValidator.deliveryNoteSchema),
-	deliveryController.addDeliveryNote
-);
+// router.post('/:id/notes',
+// 	verifyToken,
+// 	deliveryController.addDeliveryNote
+// );
 
 /**
  * @route POST /api/deliveries/zones
  * @desc Create delivery zone
  * @access Private/Admin
  */
-router.post('/zones',
-	verifyToken,
-	requireAdmin,
-	validate(deliveryValidator.deliveryZoneSchema),
-	deliveryController.createDeliveryZone
-);
+// router.post('/zones',
+// 	verifyToken,
+// 	requireAdmin,
+// 	validate(deliveryValidator.deliveryZoneSchema),
+// 	deliveryController.createDeliveryZone
+// );
 
 /**
  * @route GET /api/deliveries/zones
  * @desc Get all delivery zones
  * @access Public
  */
-router.get('/zones',
-	deliveryController.getAllDeliveryZones
-);
+// router.get('/zones',
+// 	deliveryController.getAllDeliveryZones
+// );
 
 module.exports = router;

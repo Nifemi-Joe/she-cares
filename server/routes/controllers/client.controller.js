@@ -1,8 +1,18 @@
 // src/api/controllers/client.controller.js
 
-const clientService = require('../../services/client.service');
 const { ValidationError } = require('../../utils/error-handler');
+const ClientService = require('../../services/client.service');
+const clientRepository = require('../../data/repositories/client.repository');
+const orderRepository = require('../../data/repositories/order.repository');
+const eventDispatcher = require('../../domain/events/event-dispatcher');
+const logger = require('../../infrastructure/logging/logger');
 
+const clientService = new ClientService(
+	clientRepository,
+	orderRepository,
+	eventDispatcher,
+	logger
+);
 /**
  * @class ClientController
  * @description Controller handling client/customer-related requests
@@ -10,6 +20,27 @@ const { ValidationError } = require('../../utils/error-handler');
  * @author SheCares Development Team
  */
 class ClientController {
+	/**
+	 * Get client statistics for dashboard
+	 * @param {Object} req - Express request object
+	 * @param {Object} res - Express response object
+	 * @param {Function} next - Express next middleware function
+	 */
+	async getStats(req, res, next) {
+		try {
+			const filters = req.query;
+			const stats = await clientService.getStats(filters);
+
+			res.status(200).json({
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: stats
+			});
+		} catch (error) {
+			next(error);
+		}
+	}
+
 	/**
 	 * Create a new client
 	 * @param {Object} req - Express request object
@@ -24,12 +55,12 @@ class ClientController {
 				throw new ValidationError('Client name is required');
 			}
 
-			const client = await clientService.createClient(clientData);
+			const client = await clientService.creaateClient(clientData);
 
 			res.status(201).json({
-				success: true,
-				data: client,
-				message: 'Client created successfully'
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: client
 			});
 		} catch (error) {
 			next(error);
@@ -37,38 +68,78 @@ class ClientController {
 	}
 
 	/**
-	 * Get all clients
+	 * Check if client exists by email
 	 * @param {Object} req - Express request object
 	 * @param {Object} res - Express response object
 	 * @param {Function} next - Express next middleware function
 	 */
-	async getAllClients(req, res, next) {
+	async checkClientByEmail(req, res, next) {
+		try {
+			const { email } = req.query;
+
+			if (!email) {
+				throw new ValidationError('Email is required');
+			}
+
+			const result = await clientService.checkClientByEmail(email);
+
+			if (!result) {
+				return res.status(200).json({
+					responseCode: 200,
+					responseMessage: 'Client not found',
+					responseData: {
+						exists: false,
+						id: null
+					}
+				});
+			}
+
+			res.status(200).json({
+				responseCode: 200,
+				responseMessage: 'Client found',
+				responseData: result
+			});
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
+	 * Get all clients with filtering and pagination
+	 * @param {Object} req - Express request object
+	 * @param {Object} res - Express response object
+	 * @param {Function} next - Express next middleware function
+	 */
+	async getClients(req, res, next) {
 		try {
 			const {
 				page = 1,
 				limit = 10,
-				sort = 'name',
-				order = 'asc'
+				sort,
+				isActive,
+				search
 			} = req.query;
+
+			const filters = {};
+			if (isActive !== undefined) {
+				filters.isActive = isActive === 'true';
+			}
+			if (search) {
+				filters.search = search;
+			}
 
 			const options = {
 				page: parseInt(page, 10),
 				limit: parseInt(limit, 10),
-				sort,
-				order
+				sort: sort ? JSON.parse(sort) : { createdAt: -1 }
 			};
 
-			const clients = await clientService.getAllClients(options);
+			const result = await clientService.getClients(filters, options);
 
 			res.status(200).json({
-				success: true,
-				data: clients.items,
-				pagination: {
-					page: options.page,
-					limit: options.limit,
-					total: clients.total,
-					pages: Math.ceil(clients.total / options.limit)
-				}
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: result
 			});
 		} catch (error) {
 			next(error);
@@ -87,8 +158,9 @@ class ClientController {
 			const client = await clientService.getClientById(clientId);
 
 			res.status(200).json({
-				success: true,
-				data: client
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: client
 			});
 		} catch (error) {
 			next(error);
@@ -109,9 +181,9 @@ class ClientController {
 			const updatedClient = await clientService.updateClient(clientId, updateData);
 
 			res.status(200).json({
-				success: true,
-				data: updatedClient,
-				message: 'Client updated successfully'
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: updatedClient
 			});
 		} catch (error) {
 			next(error);
@@ -130,8 +202,8 @@ class ClientController {
 			await clientService.deleteClient(clientId);
 
 			res.status(200).json({
-				success: true,
-				message: 'Client deleted successfully'
+				responseCode: 200,
+				responseMessage: 'Completed Successfully'
 			});
 		} catch (error) {
 			next(error);
@@ -156,9 +228,9 @@ class ClientController {
 			const updatedClient = await clientService.addClientDeliveryLocation(clientId, locationData);
 
 			res.status(200).json({
-				success: true,
-				data: updatedClient,
-				message: 'Delivery location added successfully'
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: updatedClient
 			});
 		} catch (error) {
 			next(error);
@@ -178,9 +250,9 @@ class ClientController {
 			const updatedClient = await clientService.removeClientDeliveryLocation(clientId, locationId);
 
 			res.status(200).json({
-				success: true,
-				data: updatedClient,
-				message: 'Delivery location removed successfully'
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: updatedClient
 			});
 		} catch (error) {
 			next(error);
@@ -205,9 +277,9 @@ class ClientController {
 			const updatedClient = await clientService.addClientNote(clientId, note);
 
 			res.status(200).json({
-				success: true,
-				data: updatedClient,
-				message: 'Note added successfully'
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: updatedClient
 			});
 		} catch (error) {
 			next(error);
@@ -232,9 +304,9 @@ class ClientController {
 			const updatedClient = await clientService.updateClientPreference(clientId, key, value);
 
 			res.status(200).json({
-				success: true,
-				data: updatedClient,
-				message: 'Preference updated successfully'
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: updatedClient
 			});
 		} catch (error) {
 			next(error);
@@ -267,13 +339,16 @@ class ClientController {
 			const orders = await clientService.getClientOrderHistory(clientId, options);
 
 			res.status(200).json({
-				success: true,
-				data: orders.items,
-				pagination: {
-					page: options.page,
-					limit: options.limit,
-					total: orders.total,
-					pages: Math.ceil(orders.total / options.limit)
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: {
+					items: orders.items,
+					pagination: {
+						page: options.page,
+						limit: options.limit,
+						total: orders.total,
+						pages: Math.ceil(orders.total / options.limit)
+					}
 				}
 			});
 		} catch (error) {
@@ -298,8 +373,9 @@ class ClientController {
 			const clients = await clientService.searchClients(query);
 
 			res.status(200).json({
-				success: true,
-				data: clients
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: clients
 			});
 		} catch (error) {
 			next(error);

@@ -10,7 +10,7 @@ const bcrypt = require('bcryptjs');
  * @author SheCares Development Team
  */
 const UserSchema = new mongoose.Schema({
-	fullName: {
+	name: {
 		type: String,
 		required: [true, 'Full name is required'],
 		trim: true
@@ -72,20 +72,6 @@ const UserSchema = new mongoose.Schema({
 /**
  * Pre-save hook to hash password
  */
-UserSchema.pre('save', async function(next) {
-	// Only hash password if it's modified or new
-	if (!this.isModified('password')) return next();
-
-	try {
-		// Generate salt
-		const salt = await bcrypt.genSalt(10);
-		// Hash password
-		this.password = await bcrypt.hash(this.password, salt);
-		next();
-	} catch (error) {
-		next(error);
-	}
-});
 
 /**
  * Compare provided password with stored hash

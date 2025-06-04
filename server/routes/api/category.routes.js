@@ -15,7 +15,6 @@ const categoryValidator = require('../../domain/validators/category.validator');
 router.post('/',
 	verifyToken,
 	requireAdmin,
-	validate(categoryValidator.validateCreate),
 	categoryController.createCategory
 );
 

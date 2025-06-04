@@ -19,7 +19,6 @@ class CategoryController {
 	async createCategory(req, res, next) {
 		try {
 			const categoryData = req.body;
-
 			if (!categoryData.name) {
 				throw new ValidationError('Category name is required');
 			}
@@ -27,9 +26,9 @@ class CategoryController {
 			const category = await categoryService.createCategory(categoryData);
 
 			res.status(201).json({
-				success: true,
-				data: category,
-				message: 'Category created successfully'
+				responseCode: true,
+				responseData: category,
+				responseMessage: 'Category created successfully'
 			});
 		} catch (error) {
 			next(error);
@@ -54,8 +53,9 @@ class CategoryController {
 			const categories = await categoryService.getAllCategories(options);
 
 			res.status(200).json({
-				success: true,
-				data: categories
+				responseCode: 200,
+				responseData: categories,
+				responseMessage: 'Categories retrieved successfully.'
 			});
 		} catch (error) {
 			next(error);
@@ -74,8 +74,9 @@ class CategoryController {
 			const category = await categoryService.getCategoryById(categoryId);
 
 			res.status(200).json({
-				success: true,
-				data: category
+				responseCode: 200,
+				responseData: category,
+				responseMessage: 'Category retrieved successfully.'
 			});
 		} catch (error) {
 			next(error);
@@ -96,9 +97,9 @@ class CategoryController {
 			const updatedCategory = await categoryService.updateCategory(categoryId, updateData);
 
 			res.status(200).json({
-				success: true,
-				data: updatedCategory,
-				message: 'Category updated successfully'
+				responseCode: 200,
+				responseData: updatedCategory,
+				responseMessage: 'Category updated successfully'
 			});
 		} catch (error) {
 			next(error);
@@ -117,8 +118,8 @@ class CategoryController {
 			await categoryService.deleteCategory(categoryId);
 
 			res.status(200).json({
-				success: true,
-				message: 'Category deleted successfully'
+				responseCode: 200,
+				responseMessage: 'Category deleted successfully'
 			});
 		} catch (error) {
 			next(error);
@@ -158,8 +159,9 @@ class CategoryController {
 			const products = await categoryService.getProductsByCategory(categoryId, options);
 
 			res.status(200).json({
-				success: true,
-				data: products.items,
+				responseCode: 200,
+				responseData: products.items,
+				responseMessage: 'Products retrieved successfully.',
 				pagination: {
 					page: options.page,
 					limit: options.limit,

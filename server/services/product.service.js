@@ -162,40 +162,94 @@ class ProductService {
 	 * @returns {Promise<Object>} Updated product
 	 * @throws {Error} Not found or database error
 	 */
+	// Fixed updateProduct method for ProductService
+
+	/**
+	 * Update a product
+	 * @param {string} productId - Product ID
+	 * @param {Object} updateData - Updated product data
+	 * @returns {Promise<Object>} Updated product
+	 * @throws {Error} Not found or database error
+	 */
 	async updateProduct(productId, updateData) {
 		try {
-			// Verify product exists
-			const existingProduct = await this.productRepository.findById(productId);
-			if (!existingProduct) {
-				throw new Error(`Product with ID ${productId} not found`);
-			}
+			// Add request timeout to prevent hanging
+			const TIMEOUT = 30000; // 30 seconds
 
-			// If category is being updated, verify it exists
-			if (updateData.categoryId && updateData.categoryId !== existingProduct.categoryId) {
-				const categoryExists = await this.categoryRepository.exists({ _id: updateData.categoryId });
-				if (!categoryExists) {
-					throw new Error(`Category with ID ${updateData.categoryId} does not exist`);
-				}
-			}
-
-			// Update timestamp
-			updateData.updatedAt = new Date();
-
-			// Update product
-			const updatedProduct = await this.productRepository.update(productId, updateData);
-
-			// Dispatch event
-			this.eventDispatcher.dispatch('product:updated', {
-				productId: updatedProduct.id,
-				updatedFields: Object.keys(updateData),
-				timestamp: new Date()
+			const updatePromise = this._performUpdate(productId, updateData);
+			const timeoutPromise = new Promise((_, reject) => {
+				setTimeout(() => reject(new Error('Update operation timed out')), TIMEOUT);
 			});
 
-			return updatedProduct;
+			return await Promise.race([updatePromise, timeoutPromise]);
 		} catch (error) {
 			this.logger.error(`Error updating product ${productId}: ${error.message}`);
 			throw error;
 		}
+	}
+
+	/**
+	 * Internal method to perform the actual update
+	 * @private
+	 */
+	async _performUpdate(productId, updateData) {
+		// Step 1: Verify product exists first
+		this.logger.info(`Starting update for product: ${productId}`);
+
+		const existingProduct = await this.productRepository.findById(productId);
+		if (!existingProduct) {
+			throw new Error(`Product with ID ${productId} not found`);
+		}
+
+		this.logger.info(`Product found, proceeding with update`);
+
+		// Step 2: Validate category if being updated
+		if (updateData.categoryId && updateData.categoryId !== existingProduct.categoryId) {
+			this.logger.info(`Validating new category: ${updateData.categoryId}`);
+
+			const categoryExists = await this.categoryRepository.exists({ _id: updateData.categoryId });
+			if (!categoryExists) {
+				throw new Error(`Category with ID ${updateData.categoryId} does not exist`);
+			}
+		}
+
+		// Step 3: Prepare update data
+		const updatePayload = {
+			...updateData,
+			updatedAt: new Date()
+		};
+
+		// Remove undefined values to prevent overwriting with null
+		Object.keys(updatePayload).forEach(key => {
+			if (updatePayload[key] === undefined) {
+				delete updatePayload[key];
+			}
+		});
+
+		this.logger.info(`Updating product with payload:`, Object.keys(updatePayload));
+
+		// Step 4: Perform the update
+		const updatedProduct = await this.productRepository.update(productId, updatePayload);
+
+		if (!updatedProduct) {
+			throw new Error(`Failed to update product with ID ${productId}`);
+		}
+
+		this.logger.info(`Product updated successfully: ${productId}`);
+
+		// Step 5: Dispatch event (non-blocking)
+		try {
+			this.eventDispatcher.dispatch('product:updated', {
+				productId: updatedProduct.id || updatedProduct._id,
+				updatedFields: Object.keys(updateData),
+				timestamp: new Date()
+			});
+		} catch (eventError) {
+			// Log but don't fail the update
+			this.logger.warn(`Failed to dispatch update event: ${eventError.message}`);
+		}
+
+		return updatedProduct;
 	}
 
 	/**
@@ -413,6 +467,133 @@ class ProductService {
 			);
 		} catch (error) {
 			this.logger.error(`Error fetching low stock products: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get product statistics for dashboard
+	 * @param {Object} filters - Optional filter criteria
+	 * @returns {Promise<Object>} Product statistics
+	 * @throws {Error} Database error
+	 */
+	async getStats(filters = {}) {
+		try {
+			// Build filter query
+			const filterQuery = {};
+
+			if (filters.categoryId) {
+				filterQuery.categoryId = filters.categoryId;
+			}
+
+			if (filters.isAvailable !== undefined) {
+				filterQuery.isAvailable = filters.isAvailable;
+			}
+
+			// Get basic counts
+			const [
+				totalProducts,
+				availableProducts,
+				unavailableProducts,
+				lowStockProducts,
+				outOfStockProducts
+			] = await Promise.all([
+				this.productRepository.count(filterQuery),
+				this.productRepository.count({ ...filterQuery, isAvailable: true }),
+				this.productRepository.count({ ...filterQuery, isAvailable: false }),
+				this.productRepository.count({
+					...filterQuery,
+					stockQuantity: { $lte: 10 },
+					isAvailable: true
+				}),
+				this.productRepository.count({
+					...filterQuery,
+					stockQuantity: { $lte: 0 }
+				})
+			]);
+
+			// Get inventory value and stock statistics
+			const inventoryStats = await this.productRepository.aggregate([
+				{ $match: filterQuery },
+				{ $group: {
+						_id: null,
+						totalInventoryValue: { $sum: { $multiply: ['$price', '$stockQuantity'] } },
+						totalStockQuantity: { $sum: '$stockQuantity' },
+						avgPrice: { $avg: '$price' },
+						minPrice: { $min: '$price' },
+						maxPrice: { $max: '$price' },
+						avgStockQuantity: { $avg: '$stockQuantity' }
+					}}
+			]);
+
+			// Get category breakdown
+			const categoryBreakdown = await this.productRepository.aggregate([
+				{ $match: filterQuery },
+				{ $lookup: {
+						from: 'categories',
+						localField: 'categoryId',
+						foreignField: '_id',
+						as: 'category'
+					}},
+				{ $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
+				{ $group: {
+						_id: '$category.name',
+						count: { $sum: 1 },
+						totalValue: { $sum: { $multiply: ['$price', '$stockQuantity'] } }
+					}},
+				{ $sort: { count: -1 } }
+			]);
+
+			const stats = inventoryStats[0] || {
+				totalInventoryValue: 0,
+				totalStockQuantity: 0,
+				avgPrice: 0,
+				minPrice: 0,
+				maxPrice: 0,
+				avgStockQuantity: 0
+			};
+
+			return {
+				totalProducts,
+				availableProducts,
+				unavailableProducts,
+				lowStockProducts,
+				outOfStockProducts,
+				...stats,
+				categoryBreakdown: categoryBreakdown.reduce((acc, curr) => {
+					acc[curr._id || 'Uncategorized'] = {
+						count: curr.count,
+						totalValue: curr.totalValue
+					};
+					return acc;
+				}, {})
+			};
+		} catch (error) {
+			this.logger.error(`Error calculating product statistics: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get top selling products
+	 * @param {number} limit - Number of products to return
+	 * @param {Object} filters - Optional filter criteria
+	 * @returns {Promise<Array>} Top products
+	 * @throws {Error} Database error
+	 */
+	async getTopProducts(limit = 5, filters = {}) {
+		try {
+			// This would typically require order data to determine top selling
+			// For now, we'll return products by stock quantity (most stocked = popular)
+			const filterQuery = { isAvailable: true, ...filters };
+
+			return await this.productRepository.find(filterQuery, {
+				sort: { stockQuantity: -1 },
+				limit: limit,
+				populate: 'categoryId'
+			});
+		} catch (error) {
+			this.logger.error(`Error fetching top products: ${error.message}`);
 			throw error;
 		}
 	}

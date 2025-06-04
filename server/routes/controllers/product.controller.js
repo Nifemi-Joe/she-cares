@@ -1,4 +1,5 @@
 // src/api/controllers/product.controller.js
+const ProductService = require('../../services/product.service');
 
 /**
  * @class ProductController
@@ -9,12 +10,12 @@
 class ProductController {
 	/**
 	 * Create a new ProductController instance
-	 * @param {Object} productService - Product service instance
+	 * @param {ProductService} productService - Product service instance
 	 * @param {Object} logger - Logger instance
 	 */
 	constructor(productService, logger) {
 		this.productService = productService;
-		this.logger = logger;
+		this.logger = logger || console;
 	}
 
 	/**
@@ -65,7 +66,11 @@ class ProductController {
 			// Get products from service
 			const result = await this.productService.getProducts(filters, options);
 
-			res.status(200).json(result);
+			res.status(200).json({
+				responseCode: 200,
+				responseMessage: 'Products retrieved successfully.',
+				responseData: result
+			});
 		} catch (error) {
 			this.logger.error(`Error in getProducts controller: ${error.message}`);
 			next(error);
@@ -85,22 +90,23 @@ class ProductController {
 
 			if (!product) {
 				return res.status(404).json({
-					status: 'error',
-					message: `Product with ID ${productId} not found`
+					responseCode: 404,
+					responseMessage: `Product with ID ${productId} not found`
 				});
 			}
 
 			res.status(200).json({
-				status: 'success',
-				data: product
+				responseCode: 200,
+				responseData: product,
+				responseMessage: 'Product retrieved successfully.'
 			});
 		} catch (error) {
 			this.logger.error(`Error in getProductById controller: ${error.message}`);
 
 			if (error.message.includes('not found')) {
 				return res.status(404).json({
-					status: 'error',
-					message: error.message
+					responseCode: 404,
+					responseMessage: error.message
 				});
 			}
 
@@ -126,8 +132,9 @@ class ProductController {
 			const createdProduct = await this.productService.createProduct(productData);
 
 			res.status(201).json({
-				status: 'success',
-				data: createdProduct
+				responseCode: 201,
+				responseData: createdProduct,
+				responseMessage: 'Product created successfully.'
 			});
 		} catch (error) {
 			this.logger.error(`Error in createProduct controller: ${error.message}`);
@@ -135,8 +142,8 @@ class ProductController {
 			if (error.message.includes('validation failed') ||
 				error.message.includes('does not exist')) {
 				return res.status(400).json({
-					status: 'error',
-					message: error.message
+					responseCode: 400,
+					responseMessage: error.message
 				});
 			}
 
@@ -150,37 +157,67 @@ class ProductController {
 	 * @param {Object} res - Express response object
 	 * @param {Function} next - Express next middleware function
 	 */
+	// Debug version of updateProduct controller method
 	async updateProduct(req, res, next) {
+		console.log('=== UPDATE PRODUCT DEBUG ===');
+		console.log('1. Request received:', req.params.id);
+		console.log('2. Request body:', req.body);
+		console.log('3. Files:', req.files);
+
 		try {
 			const productId = req.params.id;
-			const updateData = req.body;
+			const updateData = { ...req.body };
+
+			// // Parse 'images' field if it's a stringified JSON array
+			// if (typeof updateData.images === 'string') {
+			// 	try {
+			// 		updateData.images = JSON.parse(updateData.images);
+			// 	} catch (e) {
+			// 		console.warn('Invalid JSON in images field:', updateData.images);
+			// 		updateData.images = []; // fallback to empty array
+			// 	}
+			// }
+
+			console.log('4. About to call service...');
 
 			// Add image URLs if files were uploaded
 			if (req.files && req.files.length > 0) {
-				updateData.images = [...(updateData.images || []), ...req.files.map(file => file.path)];
+				const uploadedImages = req.files.map(file => ({
+					url: file.path,
+					alt: updateData.name || 'Product Image',
+					isDefault: false
+				}));
+				updateData.images = [...(updateData.images || []), ...uploadedImages];
 			}
 
+			console.log('6. Calling productService.updateProduct...');
 			const updatedProduct = await this.productService.updateProduct(productId, updateData);
 
+			console.log('7. Service call completed:', updatedProduct);
+
 			res.status(200).json({
-				status: 'success',
-				data: updatedProduct
+				responseCode: 200,
+				responseData: updatedProduct,
+				responseMessage: 'Product updated successfully.'
 			});
+
+			console.log('8. Response sent successfully');
 		} catch (error) {
+			console.log('ERROR in updateProduct controller:', error);
 			this.logger.error(`Error in updateProduct controller: ${error.message}`);
 
 			if (error.message.includes('not found')) {
 				return res.status(404).json({
-					status: 'error',
-					message: error.message
+					responseCode: 404,
+					responseMessage: error.message
 				});
 			}
 
 			if (error.message.includes('validation failed') ||
 				error.message.includes('does not exist')) {
 				return res.status(400).json({
-					status: 'error',
-					message: error.message
+					responseCode: 400,
+					responseMessage: error.message
 				});
 			}
 
@@ -201,22 +238,22 @@ class ProductController {
 
 			if (!result) {
 				return res.status(404).json({
-					status: 'error',
-					message: `Product with ID ${productId} not found`
+					responseCode: 404,
+					responseMessage: `Product with ID ${productId} not found`
 				});
 			}
 
 			res.status(200).json({
-				status: 'success',
-				message: `Product with ID ${productId} deleted successfully`
+				responseCode: 200,
+				responseMessage: `Product with ID ${productId} deleted successfully`
 			});
 		} catch (error) {
 			this.logger.error(`Error in deleteProduct controller: ${error.message}`);
 
 			if (error.message.includes('not found')) {
 				return res.status(404).json({
-					status: 'error',
-					message: error.message
+					responseCode: 404,
+					responseMessage: error.message
 				});
 			}
 
@@ -237,8 +274,8 @@ class ProductController {
 
 			if (quantity === undefined) {
 				return res.status(400).json({
-					status: 'error',
-					message: 'Quantity is required'
+					responseCode: 400,
+					responseMessage: 'Quantity is required'
 				});
 			}
 
@@ -248,23 +285,24 @@ class ProductController {
 			);
 
 			res.status(200).json({
-				status: 'success',
-				data: updatedProduct
+				responseCode: 200,
+				responseData: updatedProduct,
+				responseMessage: 'Product stock adjusted successfully.'
 			});
 		} catch (error) {
 			this.logger.error(`Error in adjustStock controller: ${error.message}`);
 
 			if (error.message.includes('not found')) {
 				return res.status(404).json({
-					status: 'error',
-					message: error.message
+					responseCode: 404,
+					responseMessage: error.message
 				});
 			}
 
 			if (error.message.includes('Insufficient stock')) {
 				return res.status(400).json({
-					status: 'error',
-					message: error.message
+					responseCode: 400,
+					responseMessage: error.message
 				});
 			}
 
@@ -285,8 +323,8 @@ class ProductController {
 
 			if (isAvailable === undefined) {
 				return res.status(400).json({
-					status: 'error',
-					message: 'isAvailable flag is required'
+					responseCode: 400,
+					responseMessage: 'isAvailable flag is required'
 				});
 			}
 
@@ -296,16 +334,17 @@ class ProductController {
 			);
 
 			res.status(200).json({
-				status: 'success',
-				data: updatedProduct
+				responseCode: 200,
+				responseData: updatedProduct,
+				responseMessage: 'Product availability updated successfully.'
 			});
 		} catch (error) {
 			this.logger.error(`Error in setAvailability controller: ${error.message}`);
 
 			if (error.message.includes('not found')) {
 				return res.status(404).json({
-					status: 'error',
-					message: error.message
+					responseCode: 404,
+					responseMessage: error.message
 				});
 			}
 
@@ -326,8 +365,8 @@ class ProductController {
 
 			if (!variantKey || price === undefined) {
 				return res.status(400).json({
-					status: 'error',
-					message: 'Variant key and price are required'
+					responseCode: 400,
+					responseMessage: 'Variant key and price are required'
 				});
 			}
 
@@ -338,16 +377,17 @@ class ProductController {
 			);
 
 			res.status(200).json({
-				status: 'success',
-				data: updatedProduct
+				responseCode: 200,
+				responseData: updatedProduct,
+				responseMessage: 'Product variant added successfully.'
 			});
 		} catch (error) {
 			this.logger.error(`Error in addVariant controller: ${error.message}`);
 
 			if (error.message.includes('not found')) {
 				return res.status(404).json({
-					status: 'error',
-					message: error.message
+					responseCode: 404,
+					responseMessage: error.message
 				});
 			}
 
@@ -368,8 +408,8 @@ class ProductController {
 
 			if (!variantKey) {
 				return res.status(400).json({
-					status: 'error',
-					message: 'Variant key is required'
+					responseCode: 400,
+					responseMessage: 'Variant key is required'
 				});
 			}
 
@@ -379,16 +419,17 @@ class ProductController {
 			);
 
 			res.status(200).json({
-				status: 'success',
-				data: updatedProduct
+				responseCode: 200,
+				responseData: updatedProduct,
+				responseMessage: 'Product variant removed successfully.'
 			});
 		} catch (error) {
 			this.logger.error(`Error in removeVariant controller: ${error.message}`);
 
 			if (error.message.includes('not found')) {
 				return res.status(404).json({
-					status: 'error',
-					message: error.message
+					responseCode: 404,
+					responseMessage: error.message
 				});
 			}
 
@@ -409,14 +450,90 @@ class ProductController {
 			const products = await this.productService.getLowStockProducts(threshold);
 
 			res.status(200).json({
-				status: 'success',
-				data: products
+				responseCode: 200,
+				responseData: products,
+				responseMessage: 'Low stock products retrieved successfully.'
 			});
 		} catch (error) {
 			this.logger.error(`Error in getLowStockProducts controller: ${error.message}`);
 			next(error);
 		}
 	}
+
+	/**
+	 * Get product statistics for dashboard
+	 * @param {Object} req - Express request object
+	 * @param {Object} res - Express response object
+	 * @param {Function} next - Express next middleware function
+	 */
+	async getStats(req, res, next) {
+		try {
+			const filters = {
+				categoryId: req.query.categoryId,
+				isAvailable: req.query.available !== undefined
+					? req.query.available === 'true'
+					: undefined
+			};
+
+			const stats = await this.productService.getStats(filters);
+
+			res.status(200).json({
+				responseCode: 200,
+				responseData: stats,
+				responseMessage: 'Product statistics retrieved successfully.'
+			});
+		} catch (error) {
+			this.logger.error(`Error in getStats controller: ${error.message}`);
+			next(error);
+		}
+	}
+
+	/**
+	 * Get top selling products
+	 * @param {Object} req - Express request object
+	 * @param {Object} res - Express response object
+	 * @param {Function} next - Express next middleware function
+	 */
+	async getTopProducts(req, res, next) {
+		try {
+			const limit = req.query.limit ? parseInt(req.query.limit, 10) : 5;
+			const filters = {
+				categoryId: req.query.categoryId,
+				isAvailable: req.query.available !== undefined
+					? req.query.available === 'true'
+					: undefined
+			};
+
+			const products = await this.productService.getTopProducts(limit, filters);
+
+			res.status(200).json({
+				responseCode: 200,
+				responseData: products,
+				responseMessage: 'Top products retrieved successfully.'
+			});
+		} catch (error) {
+			this.logger.error(`Error in getTopProducts controller: ${error.message}`);
+			next(error);
+		}
+	}
 }
 
-module.exports = ProductController;
+// Create a default export that instantiates the controller with the correct dependencies
+const productRepository = require('../../data/repositories/product.repository');
+const categoryRepository = require('../../data/repositories/category.repository');
+const eventDispatcher = require('../../domain/events/event-dispatcher');
+const logger = console;
+
+// Create an instance of the product service
+const productService = new ProductService(
+	productRepository,
+	categoryRepository,
+	eventDispatcher,
+	logger
+);
+
+// Create an instance of the product controller with the product service
+const productController = new ProductController(productService, logger);
+
+// Export the controller instance
+module.exports = productController;

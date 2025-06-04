@@ -22,9 +22,9 @@ class AuthController {
 			const user = await authService.register(userData);
 
 			res.status(201).json({
-				success: true,
-				data: user,
-				message: 'User registered successfully'
+				responseCode: 201,
+				responseData: user,
+				responseMessage: 'User registered successfully'
 			});
 		} catch (error) {
 			next(error);
@@ -48,9 +48,9 @@ class AuthController {
 			const authData = await authService.login(email, password);
 
 			res.status(200).json({
-				success: true,
-				data: authData,
-				message: 'Login successful'
+				responseCode: 200,
+				responseData: authData,
+				responseMessage: 'Login successful'
 			});
 		} catch (error) {
 			next(error);
@@ -65,12 +65,14 @@ class AuthController {
 	 */
 	async getProfile(req, res, next) {
 		try {
+			console.log(req.user)
 			const userId = req.user.id;
 			const user = await authService.getProfile(userId);
 
 			res.status(200).json({
-				success: true,
-				data: user
+				responseCode: 200,
+				responseData: user,
+				responseMessage: 'Profile retrieved successfully.'
 			});
 		} catch (error) {
 			next(error);
@@ -90,9 +92,9 @@ class AuthController {
 			const updatedUser = await authService.updateProfile(userId, profileData);
 
 			res.status(200).json({
-				success: true,
-				data: updatedUser,
-				message: 'Profile updated successfully'
+				responseCode: 200,
+				responseData: updatedUser,
+				responseMessage: 'Profile updated successfully'
 			});
 		} catch (error) {
 			next(error);
@@ -117,8 +119,8 @@ class AuthController {
 			await authService.changePassword(userId, currentPassword, newPassword);
 
 			res.status(200).json({
-				success: true,
-				message: 'Password changed successfully'
+				responseCode: 200,
+				responseMessage: 'Password changed successfully'
 			});
 		} catch (error) {
 			next(error);
@@ -136,8 +138,9 @@ class AuthController {
 			const users = await authService.getAllUsers();
 
 			res.status(200).json({
-				success: true,
-				data: users
+				responseCode: 200,
+				responseData: users,
+				responseMessage: 'All Users retrieved successfully'
 			});
 		} catch (error) {
 			next(error);
@@ -162,9 +165,9 @@ class AuthController {
 			const user = await authService.setUserStatus(userId, isActive);
 
 			res.status(200).json({
-				success: true,
-				data: user,
-				message: `User ${isActive ? 'activated' : 'deactivated'} successfully`
+				responseCode: 200,
+				responseData: user,
+				responseMessage: `User ${isActive ? 'activated' : 'deactivated'} successfully`
 			});
 		} catch (error) {
 			next(error);

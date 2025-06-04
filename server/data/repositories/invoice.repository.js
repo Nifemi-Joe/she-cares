@@ -12,7 +12,77 @@ const mongodb = require('../../infrastructure/database/mongodb');
  */
 class InvoiceRepository extends BaseRepository {
 	constructor() {
-		super('invoices');
+		super(invoiceSchema);
+		this.collectionName = 'invoices';
+	}
+
+	/**
+	 * Find all invoices with optional filters
+	 * @param {Object} options - Query options (pagination, filters, sorting)
+	 * @returns {Promise<Array<Object>>} List of invoices
+	 */
+	async findAll(options = {}) {
+		try {
+			// Ensure connection before proceeding
+
+			// Get the mongoose connection
+			const connection = await mongodb.mongoose.connection;
+			const collection = connection.collection(this.collectionName);
+
+			// Parse options
+			const {
+				page = 1,
+				limit = 10,
+				sort = '-createdAt',
+				status,
+				fromDate,
+				toDate,
+				clientId
+			} = options;
+
+			// Build query
+			const query = {};
+
+			if (status) {
+				query.status = status;
+			}
+
+			if (clientId) {
+				query.clientId = clientId;
+			}
+
+			if (fromDate || toDate) {
+				query.createdAt = {};
+
+				if (fromDate) {
+					query.createdAt.$gte = new Date(fromDate);
+				}
+
+				if (toDate) {
+					query.createdAt.$lte = new Date(toDate);
+				}
+			}
+
+			// Build sort object
+			const sortObj = {};
+			const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
+			const sortDirection = sort.startsWith('-') ? -1 : 1;
+			sortObj[sortField] = sortDirection;
+
+			// Calculate pagination
+			const skip = (page - 1) * limit;
+
+			const cursor = collection
+				.find(query)
+				.sort(sortObj)
+				.skip(skip)
+				.limit(limit);
+
+			const invoices = await cursor.toArray();
+			return invoices.map(invoice => this._toModel(invoice));
+		} catch (error) {
+			throw new DatabaseError(`Error finding documents: ${error.message}`);
+		}
 	}
 
 	/**
@@ -22,8 +92,8 @@ class InvoiceRepository extends BaseRepository {
 	 */
 	async findByInvoiceNumber(invoiceNumber) {
 		try {
-			const db = await mongodb.getDb();
-			const collection = db.collection(this.collectionName);
+			const connection = await mongodb.mongoose.connection;
+			const collection = connection.collection(this.collectionName);
 
 			const invoice = await collection.findOne({ invoiceNumber });
 
@@ -44,8 +114,9 @@ class InvoiceRepository extends BaseRepository {
 	 */
 	async findByOrderId(orderId) {
 		try {
-			const db = await mongodb.getDb();
-			const collection = db.collection(this.collectionName);
+			await mongodb.ensureConnection();
+			const connection = await mongodb.mongoose.connection;
+			const collection = connection.collection(this.collectionName);
 
 			const invoice = await collection.findOne({ orderId });
 
@@ -69,8 +140,9 @@ class InvoiceRepository extends BaseRepository {
 		try {
 			const { skip, limit, sort } = this._parsePaginationOptions(options);
 
-			const db = await mongodb.getDb();
-			const collection = db.collection(this.collectionName);
+			await mongodb.ensureConnection();
+			const connection = await mongodb.mongoose.connection;
+			const collection = connection.collection(this.collectionName);
 
 			const query = { clientId };
 			const cursor = collection
@@ -99,8 +171,9 @@ class InvoiceRepository extends BaseRepository {
 		try {
 			const { skip, limit, sort } = this._parsePaginationOptions(options);
 
-			const db = await mongodb.getDb();
-			const collection = db.collection(this.collectionName);
+			await mongodb.ensureConnection();
+			const connection = await mongodb.mongoose.connection;
+			const collection = connection.collection(this.collectionName);
 
 			const query = { status };
 			const cursor = collection
@@ -130,8 +203,9 @@ class InvoiceRepository extends BaseRepository {
 		try {
 			const { skip, limit, sort } = this._parsePaginationOptions(options);
 
-			const db = await mongodb.getDb();
-			const collection = db.collection(this.collectionName);
+			await mongodb.ensureConnection();
+			const connection = await mongodb.mongoose.connection;
+			const collection = connection.collection(this.collectionName);
 
 			const query = {
 				createdAt: {
@@ -164,8 +238,9 @@ class InvoiceRepository extends BaseRepository {
 	 */
 	async countByMonthYear(month, year) {
 		try {
-			const db = await mongodb.getDb();
-			const collection = db.collection(this.collectionName);
+			await mongodb.ensureConnection();
+			const connection = await mongodb.mongoose.connection;
+			const collection = connection.collection(this.collectionName);
 
 			// Format: INV-YY-MM-XXXX
 			const prefix = `INV-${year.length === 4 ? year.slice(-2) : year}-${month}`;
@@ -187,8 +262,9 @@ class InvoiceRepository extends BaseRepository {
 	 */
 	async getStats(options = {}) {
 		try {
-			const db = await mongodb.getDb();
-			const collection = db.collection(this.collectionName);
+			await mongodb.ensureConnection();
+			const connection = await mongodb.mongoose.connection;
+			const collection = connection.collection(this.collectionName);
 
 			// Basic query for filtering
 			const query = {};
@@ -249,6 +325,45 @@ class InvoiceRepository extends BaseRepository {
 		} catch (error) {
 			throw new DatabaseError(`Error getting invoice statistics: ${error.message}`);
 		}
+	}
+
+	/**
+	 * Parse pagination options
+	 * @param {Object} options - Pagination options
+	 * @returns {Object} Parsed options
+	 * @private
+	 */
+	_parsePaginationOptions(options = {}) {
+		const page = parseInt(options.page, 10) || 1;
+		const limit = parseInt(options.limit, 10) || 10;
+		const skip = (page - 1) * limit;
+
+		let sort = null;
+		if (options.sort) {
+			sort = {};
+			const sortField = options.sort.startsWith('-') ? options.sort.substring(1) : options.sort;
+			const sortDirection = options.sort.startsWith('-') ? -1 : 1;
+			sort[sortField] = sortDirection;
+		}
+
+		return { skip, limit, sort };
+	}
+
+	/**
+	 * Convert MongoDB document to model
+	 * @param {Object} document - MongoDB document
+	 * @returns {Object} Model
+	 * @private
+	 */
+	_toModel(document) {
+		if (!document) return null;
+
+		// Convert MongoDB _id to id
+		const { _id, ...rest } = document;
+		return {
+			...rest,
+			id: _id.toString()
+		};
 	}
 
 	/**

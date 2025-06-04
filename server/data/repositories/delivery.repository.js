@@ -12,7 +12,7 @@ const mongodb = require('../../infrastructure/database/mongodb');
  */
 class DeliveryRepository extends BaseRepository {
 	constructor() {
-		super('deliveries');
+		super(deliverySchema);
 	}
 
 	/**

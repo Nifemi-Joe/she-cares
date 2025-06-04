@@ -2,7 +2,7 @@
 
 const { logger } = require('../../infrastructure/logging/logger');
 const {
-	BaseError,
+	AppError,
 	NotFoundError,
 	ValidationError,
 	AuthenticationError,
@@ -26,8 +26,10 @@ const errorHandler = (err, req, res, next) => {
 	});
 
 	// Handle known errors
-	if (err instanceof BaseError) {
+	if (err instanceof AppError) {
 		return res.status(err.statusCode).json({
+			responseCode: err.statusCode,
+			responseMessage: err.message,
 			error: {
 				status: err.statusCode,
 				name: err.name,
@@ -41,6 +43,8 @@ const errorHandler = (err, req, res, next) => {
 	// Handle MongoDB validation errors
 	if (err.name === 'ValidationError') {
 		return res.status(400).json({
+			responseCode: err.statusCode,
+			responseMessage: err.message,
 			error: {
 				status: 400,
 				name: 'ValidationError',
@@ -53,6 +57,8 @@ const errorHandler = (err, req, res, next) => {
 	// Handle MongoDB duplicate key errors
 	if (err.name === 'MongoError' && err.code === 11000) {
 		return res.status(409).json({
+			responseCode: err.statusCode,
+			responseMessage: err.message,
 			error: {
 				status: 409,
 				name: 'ConflictError',
@@ -65,6 +71,8 @@ const errorHandler = (err, req, res, next) => {
 	// Handle JWT errors
 	if (err.name === 'JsonWebTokenError') {
 		return res.status(401).json({
+			responseCode: err.statusCode,
+			responseMessage: err.message,
 			error: {
 				status: 401,
 				name: 'AuthenticationError',
@@ -76,6 +84,8 @@ const errorHandler = (err, req, res, next) => {
 
 	if (err.name === 'TokenExpiredError') {
 		return res.status(401).json({
+			responseCode: err.statusCode,
+			responseMessage: err.message,
 			error: {
 				status: 401,
 				name: 'AuthenticationError',
@@ -89,6 +99,8 @@ const errorHandler = (err, req, res, next) => {
 	const isProduction = process.env.NODE_ENV === 'production';
 
 	return res.status(500).json({
+		responseCode: err.statusCode,
+		responseMessage: err.message,
 		error: {
 			status: 500,
 			name: 'InternalServerError',

@@ -41,7 +41,7 @@ const authenticate = async (req, res, next) => {
 			id: user.id,
 			email: user.email,
 			role: user.role,
-			fullName: user.fullName
+			fullName: user.fullName || user.name
 		};
 
 		next();
@@ -80,6 +80,9 @@ const authorize = (roles) => {
 	};
 };
 
+/**
+ * Alternative token verification middleware
+ */
 const verifyToken = async (req, res, next) => {
 	try {
 		// Get token from header
@@ -93,9 +96,12 @@ const verifyToken = async (req, res, next) => {
 
 		// Verify token
 		const decoded = jwt.verify(token, config.jwtSecret);
+		console.log('Decoded token:', decoded);
 
 		// Check if user exists and is active
 		const user = await userRepository.findById(decoded.id);
+		console.log('Found user:', user);
+
 		if (!user) {
 			throw new AuthenticationError('User not found');
 		}
@@ -106,13 +112,16 @@ const verifyToken = async (req, res, next) => {
 
 		// Add user to request object
 		req.user = {
-			id: user.id,
+			fullName: user.name || user.fullName,
+			id: user._id ? user._id.toString() : user.id,
 			email: user.email,
-			role: user.role
+			role: user.role,
+			permissions: user.permissions || []
 		};
 
 		next();
 	} catch (error) {
+		console.error('verifyToken error:', error);
 		if (error.name === 'JsonWebTokenError') {
 			next(new AuthenticationError('Invalid token'));
 		} else if (error.name === 'TokenExpiredError') {

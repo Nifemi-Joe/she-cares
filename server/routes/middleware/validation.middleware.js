@@ -3,26 +3,46 @@
 const { ValidationError } = require('../../utils/error-handler');
 
 /**
- * Validate request data against a validator schema
- * @param {Function} validator - Validator function
+ * Validate request data against a validator method
+ * @param {Function} validatorMethod - Validator method
  * @param {String} source - Request property to validate ('body', 'query', 'params')
  */
-const validate = (validator, source = 'body') => {
+const validate = (validatorMethod, source = 'body') => {
 	return (req, res, next) => {
 		try {
 			const data = req[source];
-			const { error, value } = validator(data);
 
-			if (error) {
-				const errorMessage = error.details
-					? error.details.map(detail => detail.message).join(', ')
+			// Check if validatorMethod is a function or method
+			if (typeof validatorMethod !== 'function') {
+				throw new Error('Invalid validator: must be a function');
+			}
+
+			// Call the validator method (which should return {isValid, errors})
+			const validationResult = validatorMethod(data);
+
+			// If using Joi schema, handle that format
+			if (validationResult.error) {
+				const errorMessage = validationResult.error.details
+					? validationResult.error.details.map(detail => detail.message).join(', ')
 					: 'Validation error';
 
 				throw new ValidationError(errorMessage);
 			}
 
-			// Replace request data with validated data
-			req[source] = value;
+			// If using our custom validator format
+			if (validationResult.isValid === false) {
+				throw new ValidationError(
+					typeof validationResult.errors === 'string'
+						? validationResult.errors
+						: JSON.stringify(validationResult.errors)
+				);
+			}
+
+			// Replace request data with validated data if present
+			if (validationResult.value) {
+				req[source] = validationResult.value;
+			}
+
 			next();
 		} catch (error) {
 			next(error);

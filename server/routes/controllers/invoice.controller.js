@@ -21,11 +21,15 @@ class InvoiceController {
 			const invoiceData = req.body;
 			const invoice = await invoiceService.createInvoice(invoiceData);
 			res.status(201).json({
-				success: true,
-				data: invoice
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: invoice
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Failed to create invoice'
+			});
 		}
 	}
 
@@ -49,11 +53,15 @@ class InvoiceController {
 
 			const invoices = await invoiceService.getAllInvoices(options);
 			res.status(200).json({
-				success: true,
-				data: invoices
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: invoices
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Failed to fetch invoices'
+			});
 		}
 	}
 
@@ -68,11 +76,15 @@ class InvoiceController {
 			const { id } = req.params;
 			const invoice = await invoiceService.getInvoiceById(id);
 			res.status(200).json({
-				success: true,
-				data: invoice
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: invoice
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Invoice not found'
+			});
 		}
 	}
 
@@ -87,11 +99,15 @@ class InvoiceController {
 			const { orderId } = req.params;
 			const invoice = await invoiceService.getInvoiceByOrderId(orderId);
 			res.status(200).json({
-				success: true,
-				data: invoice
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: invoice
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Invoice not found for order'
+			});
 		}
 	}
 
@@ -107,11 +123,15 @@ class InvoiceController {
 			const updateData = req.body;
 			const updatedInvoice = await invoiceService.updateInvoice(id, updateData);
 			res.status(200).json({
-				success: true,
-				data: updatedInvoice
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: updatedInvoice
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Failed to update invoice'
+			});
 		}
 	}
 
@@ -132,11 +152,15 @@ class InvoiceController {
 
 			const updatedInvoice = await invoiceService.updateInvoiceStatus(id, status);
 			res.status(200).json({
-				success: true,
-				data: updatedInvoice
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: updatedInvoice
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Failed to update invoice status'
+			});
 		}
 	}
 
@@ -151,11 +175,14 @@ class InvoiceController {
 			const { id } = req.params;
 			await invoiceService.deleteInvoice(id);
 			res.status(200).json({
-				success: true,
-				message: 'Invoice deleted successfully'
+				responseCode: 200,
+				responseMessage: 'Completed Successfully'
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Failed to delete invoice'
+			});
 		}
 	}
 
@@ -177,7 +204,10 @@ class InvoiceController {
 			// Send PDF
 			res.status(200).send(pdfBuffer);
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Failed to generate invoice PDF'
+			});
 		}
 	}
 
@@ -194,11 +224,14 @@ class InvoiceController {
 
 			await invoiceService.sendInvoiceByEmail(id, options);
 			res.status(200).json({
-				success: true,
-				message: 'Invoice sent successfully'
+				responseCode: 200,
+				responseMessage: 'Completed Successfully'
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Failed to send invoice by email'
+			});
 		}
 	}
 
@@ -219,11 +252,15 @@ class InvoiceController {
 
 			const updatedInvoice = await invoiceService.recordPayment(id, paymentData);
 			res.status(200).json({
-				success: true,
-				data: updatedInvoice
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: updatedInvoice
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Failed to record payment'
+			});
 		}
 	}
 
@@ -245,11 +282,15 @@ class InvoiceController {
 
 			const invoices = await invoiceService.getInvoicesByClient(clientId, options);
 			res.status(200).json({
-				success: true,
-				data: invoices
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: invoices
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Failed to fetch invoices for client'
+			});
 		}
 	}
 
@@ -268,11 +309,15 @@ class InvoiceController {
 
 			const stats = await invoiceService.getInvoiceStats(options);
 			res.status(200).json({
-				success: true,
-				data: stats
+				responseCode: 200,
+				responseMessage: 'Completed Successfully',
+				responseData: stats
 			});
 		} catch (error) {
-			next(error);
+			res.status(404).json({
+				responseCode: 404,
+				responseMessage: error.message || 'Failed to fetch invoice statistics'
+			});
 		}
 	}
 }

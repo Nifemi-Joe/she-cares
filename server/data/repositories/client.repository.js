@@ -17,7 +17,7 @@ class ClientRepository extends BaseRepository {
 	 * Initialize client repository
 	 */
 	constructor() {
-		super('clients', ClientSchema);
+		super(ClientSchema);
 	}
 
 	/**
@@ -29,7 +29,7 @@ class ClientRepository extends BaseRepository {
 		try {
 			if (!email) return null;
 
-			const client = await this.collection.findOne({
+			const client = await this.model.findOne({
 				email: { $regex: new RegExp(`^${email}$`, 'i') }
 			});
 			return client ? this._toModel(client) : null;
@@ -51,9 +51,9 @@ class ClientRepository extends BaseRepository {
 			const normalizedPhone = phone.replace(/\D/g, '');
 
 			// Find clients and then filter by normalized phone
-			const clients = await this.collection
+			const clients = await this.model
 				.find({ phone: { $exists: true } })
-				.toArray();
+				.lean();
 
 			// Check each client's phone number after normalizing
 			const matchingClient = clients.find(client => {
@@ -93,12 +93,12 @@ class ClientRepository extends BaseRepository {
 			// Handle sorting
 			const sort = options.sort || { name: 1 };
 
-			const clients = await this.collection
+			const clients = await this.model
 				.find(searchQuery)
 				.sort(sort)
 				.skip(skip)
 				.limit(limit)
-				.toArray();
+				.lean();
 
 			return clients.map(client => this._toModel(client));
 		} catch (error) {
@@ -120,11 +120,11 @@ class ClientRepository extends BaseRepository {
 
 			const sortField = sortBy === 'totalSpent' ? 'totalSpent' : 'totalOrders';
 
-			const clients = await this.collection
+			const clients = await this.model
 				.find()
 				.sort({ [sortField]: -1 })
 				.limit(limit)
-				.toArray();
+				.lean();
 
 			return clients.map(client => this._toModel(client));
 		} catch (error) {
@@ -134,18 +134,31 @@ class ClientRepository extends BaseRepository {
 
 	/**
 	 * Find recent clients
-	 * @param {number} limit - Number of clients to return
-	 * @returns {Promise<Array<Client>>} List of recent clients
+	 * @param {Object} options - Query options
+	 * @returns {Promise<Object>} Object containing items and total count
 	 */
-	async findRecentClients(limit = 10) {
+	async findRecentClients(options = {}) {
 		try {
-			const clients = await this.collection
-				.find()
-				.sort({ createdAt: -1 })
-				.limit(limit)
-				.toArray();
+			const { page = 1, limit = 10, sort = 'name', order = 'asc' } = options;
+			const skip = (page - 1) * limit;
 
-			return clients.map(client => this._toModel(client));
+			const sortOption = {};
+			sortOption[sort] = order === 'asc' ? 1 : -1;
+
+			const [clients, total] = await Promise.all([
+				this.model
+					.find()
+					.sort(sortOption)
+					.skip(skip)
+					.limit(limit)
+					.lean(),
+				this.model.countDocuments()
+			]);
+
+			return {
+				items: clients.map(client => this._toModel(client)),
+				total
+			};
 		} catch (error) {
 			throw new DatabaseError(`Error finding recent clients: ${error.message}`);
 		}
@@ -157,7 +170,7 @@ class ClientRepository extends BaseRepository {
 	 */
 	async getStats() {
 		try {
-			const stats = await this.collection.aggregate([
+			const stats = await this.model.aggregate([
 				{
 					$group: {
 						_id: null,
@@ -175,7 +188,7 @@ class ClientRepository extends BaseRepository {
 						}
 					}
 				}
-			]).toArray();
+			]);
 
 			return stats[0] || {
 				totalClients: 0,
@@ -196,8 +209,8 @@ class ClientRepository extends BaseRepository {
 	 */
 	async updateOrderStats(clientId, orderAmount) {
 		try {
-			const result = await this.collection.findOneAndUpdate(
-				{ _id: this._objectId(clientId) },
+			const result = await this.model.findByIdAndUpdate(
+				clientId,
 				{
 					$inc: {
 						totalOrders: 1,
@@ -208,8 +221,8 @@ class ClientRepository extends BaseRepository {
 						updatedAt: new Date()
 					}
 				},
-				{ returnDocument: 'after' }
-			);
+				{ new: true }
+			).lean();
 
 			if (!result) {
 				throw new Error('Client not found');

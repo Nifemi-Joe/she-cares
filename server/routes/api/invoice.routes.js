@@ -4,8 +4,9 @@ const express = require('express');
 const router = express.Router();
 const invoiceController = require('../controllers/invoice.controller');
 const invoiceValidator = require('../../domain/validators/invoice.validator');
-const { validate } = require('../middleware/validation.middleware');
+const { validate, validatePagination } = require('../middleware/validation.middleware');
 const { verifyToken, requireAdmin } = require('../middleware/auth.middleware');
+
 /**
  * @route POST /api/invoices
  * @desc Create a new invoice
@@ -13,7 +14,7 @@ const { verifyToken, requireAdmin } = require('../middleware/auth.middleware');
  */
 router.post('/',
 	verifyToken,
-	validate(invoiceValidator.createInvoiceSchema),
+	validate(invoiceValidator.createInvoiceSchema, 'body'),
 	invoiceController.createInvoice
 );
 
@@ -24,7 +25,20 @@ router.post('/',
  */
 router.get('/',
 	verifyToken,
+	validatePagination,
 	invoiceController.getAllInvoices
+);
+
+/**
+ * @route GET /api/invoices/stats
+ * @desc Get invoice statistics
+ * @access Private/Admin
+ * @note This route must be before /:id to avoid conflicts
+ */
+router.get('/stats',
+	verifyToken,
+	requireAdmin,
+	invoiceController.getInvoiceStats
 );
 
 /**
@@ -33,6 +47,7 @@ router.get('/',
  * @access Mixed (authenticated users or invoice owner with token)
  */
 router.get('/:id',
+	validate(invoiceValidator.validateInvoiceId, 'params'),
 	invoiceController.getInvoiceById
 );
 
@@ -42,7 +57,20 @@ router.get('/:id',
  * @access Mixed (authenticated users or order owner with token)
  */
 router.get('/order/:orderId',
+	validate(invoiceValidator.validateOrderId, 'params'),
 	invoiceController.getInvoiceByOrderId
+);
+
+/**
+ * @route GET /api/invoices/client/:clientId
+ * @desc Get invoices by client ID
+ * @access Private
+ */
+router.get('/client/:clientId',
+	verifyToken,
+	validate(invoiceValidator.validateClientId, 'params'),
+	validatePagination,
+	invoiceController.getInvoicesByClient
 );
 
 /**
@@ -52,7 +80,8 @@ router.get('/order/:orderId',
  */
 router.put('/:id',
 	verifyToken,
-	validate(invoiceValidator.updateInvoiceSchema),
+	validate(invoiceValidator.validateInvoiceId, 'params'),
+	validate(invoiceValidator.updateInvoiceSchema, 'body'),
 	invoiceController.updateInvoice
 );
 
@@ -63,7 +92,8 @@ router.put('/:id',
  */
 router.put('/:id/status',
 	verifyToken,
-	validate(invoiceValidator.updateInvoiceStatusSchema),
+	validate(invoiceValidator.validateInvoiceId, 'params'),
+	validate(invoiceValidator.updateInvoiceStatusSchema, 'body'),
 	invoiceController.updateInvoiceStatus
 );
 
@@ -75,6 +105,7 @@ router.put('/:id/status',
 router.delete('/:id',
 	verifyToken,
 	requireAdmin,
+	validate(invoiceValidator.validateInvoiceId, 'params'),
 	invoiceController.deleteInvoice
 );
 
@@ -84,6 +115,7 @@ router.delete('/:id',
  * @access Mixed (authenticated users or invoice owner with token)
  */
 router.get('/:id/pdf',
+	validate(invoiceValidator.validateInvoiceId, 'params'),
 	invoiceController.generateInvoicePDF
 );
 
@@ -94,7 +126,8 @@ router.get('/:id/pdf',
  */
 router.post('/:id/send',
 	verifyToken,
-	validate(invoiceValidator.sendInvoiceSchema),
+	validate(invoiceValidator.validateInvoiceId, 'params'),
+	validate(invoiceValidator.sendInvoiceSchema, 'body'),
 	invoiceController.sendInvoiceByEmail
 );
 
@@ -105,29 +138,9 @@ router.post('/:id/send',
  */
 router.post('/:id/payment',
 	verifyToken,
-	validate(invoiceValidator.recordPaymentSchema),
+	validate(invoiceValidator.validateInvoiceId, 'params'),
+	validate(invoiceValidator.recordPaymentSchema, 'body'),
 	invoiceController.recordPayment
-);
-
-/**
- * @route GET /api/invoices/client/:clientId
- * @desc Get invoices by client ID
- * @access Private
- */
-router.get('/client/:clientId',
-	verifyToken,
-	invoiceController.getInvoicesByClient
-);
-
-/**
- * @route GET /api/invoices/stats
- * @desc Get invoice statistics
- * @access Private/Admin
- */
-router.get('/stats',
-	verifyToken,
-	requireAdmin,
-	invoiceController.getInvoiceStats
 );
 
 module.exports = router;

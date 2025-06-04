@@ -1,16 +1,15 @@
-// src/api/routes/product.routes.js
-
 /**
  * @description Product API routes
  * @since v1.0.0 (2015)
  * @author SheCares Development Team
  */
-
 const express = require('express');
-const multer = require('multer');
+const router = express.Router();
 const path = require('path');
+const multer = require('multer');
+const productController = require('../controllers/product.controller');
 
-// Import middleware
+// Middleware imports
 const authMiddleware = require('../middleware/auth.middleware');
 const validationMiddleware = require('../middleware/validation.middleware');
 
@@ -28,9 +27,8 @@ const storage = multer.diskStorage({
 
 const upload = multer({
 	storage,
-	limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+	limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 	fileFilter: (req, file, cb) => {
-		// Accept images only
 		if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
 			return cb(new Error('Only image files are allowed!'), false);
 		}
@@ -38,60 +36,83 @@ const upload = multer({
 	}
 });
 
-module.exports = (app, productController) => {
-	const router = express.Router();
+// Public Routes
+// Get all products (with filtering and pagination) - MUST be first
+router.get('/', (req, res, next) => productController.getProducts(req, res, next));
 
-	// Base product routes
-	router.get('/', productController.getProducts.bind(productController));
-	router.get('/low-stock', authMiddleware.verifyToken, productController.getLowStockProducts.bind(productController));
-	router.get('/:id', productController.getProductById.bind(productController));
-	router.post(
-		'/',
-		authMiddleware.verifyToken,
-		upload.array('images', 5),
-		validationMiddleware.validateProduct,
-		productController.createProduct.bind(productController)
-	);
-	router.put(
-		'/:id',
-		authMiddleware.verifyToken,
-		upload.array('images', 5),
-		validationMiddleware.validateProductUpdate,
-		productController.updateProduct.bind(productController)
-	);
-	router.delete(
-		'/:id',
-		authMiddleware.verifyToken,
-		productController.deleteProduct.bind(productController)
-	);
+// Protected Routes - Analytics/Statistics (BEFORE /:id route)
+// Get product statistics (Protected)
+router.get('/stats',
+	authMiddleware.verifyToken,
+	(req, res, next) => productController.getStats(req, res, next)
+);
 
-	// Stock management
-	router.post(
-		'/:id/stock',
-		authMiddleware.verifyToken,
-		validationMiddleware.validateStockAdjustment,
-		productController.adjustStock.bind(productController)
-	);
+// Get top products (Protected)
+router.get('/analytics/top',
+	authMiddleware.verifyToken,
+	(req, res, next) => productController.getTopProducts(req, res, next)
+);
 
-	// Availability management
-	router.patch(
-		'/:id/availability',
-		authMiddleware.verifyToken,
-		productController.setAvailability.bind(productController)
-	);
+// Get low stock products (Protected)
+router.get('/analytics/low-stock',
+	authMiddleware.verifyToken,
+	(req, res, next) => productController.getLowStockProducts(req, res, next)
+);
 
-	// Variant management
-	router.post(
-		'/:id/variants',
-		authMiddleware.verifyToken,
-		validationMiddleware.validateVariant,
-		productController.addVariant.bind(productController)
-	);
-	router.delete(
-		'/:id/variants/:variantKey',
-		authMiddleware.verifyToken,
-		productController.removeVariant.bind(productController)
-	);
+// Protected Routes - CRUD Operations
+// Create product (Protected, with images)
+router.post('/',
+	authMiddleware.verifyToken,
+	upload.array('images', 5),
+	(req, res, next) => productController.createProduct(req, res, next)
+);
 
-	app.use('/api/products', router);
-};
+// Get product by ID - MUST come AFTER specific routes like /stats
+router.get('/:id', (req, res, next) => productController.getProductById(req, res, next));
+
+// Update product (Protected, with images)
+router.put('/:id',
+	authMiddleware.verifyToken,
+	// upload.array('images', 5),
+	// validationMiddleware.validateObjectId,
+	(req, res, next) => productController.updateProduct(req, res, next)
+);
+
+// Delete product (Protected)
+router.delete('/:id',
+	authMiddleware.verifyToken,
+	validationMiddleware.validateObjectId,
+	(req, res, next) => productController.deleteProduct(req, res, next)
+);
+
+// Protected Routes - Stock Management
+// Adjust stock (Protected)
+router.post('/:id/stock',
+	authMiddleware.verifyToken,
+	validationMiddleware.validateObjectId,
+	(req, res, next) => productController.adjustStock(req, res, next)
+);
+
+// Set availability (Protected)
+router.patch('/:id/availability',
+	authMiddleware.verifyToken,
+	validationMiddleware.validateObjectId,
+	(req, res, next) => productController.setAvailability(req, res, next)
+);
+
+// Protected Routes - Variant Management
+// Add variant (Protected)
+router.post('/:id/variants',
+	authMiddleware.verifyToken,
+	validationMiddleware.validateObjectId,
+	(req, res, next) => productController.addVariant(req, res, next)
+);
+
+// Remove variant (Protected)
+router.delete('/:id/variants/:variantKey',
+	authMiddleware.verifyToken,
+	validationMiddleware.validateObjectId,
+	(req, res, next) => productController.removeVariant(req, res, next)
+);
+
+module.exports = router;

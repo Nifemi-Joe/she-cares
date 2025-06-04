@@ -10,9 +10,9 @@ class AppError extends Error {
 	constructor(message, statusCode = 500, code = 'INTERNAL_SERVER_ERROR') {
 		super(message);
 		this.statusCode = statusCode;
-		this.code = code;
+		this.responseCode = statusCode;
+		this.responseMessage = message;
 		this.isOperational = true; // Used to distinguish operational errors from programming errors
-
 		Error.captureStackTrace(this, this.constructor);
 	}
 }
