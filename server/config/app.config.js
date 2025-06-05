@@ -64,7 +64,7 @@ const appConfig = {
 		baseUrl: process.env.BASE_URL,
 		clientUrl: process.env.CLIENT_URL,
 		cors: {
-			origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [],
+			origin: '*',
 			credentials: true
 		},
 		serveStaticFiles: true,
