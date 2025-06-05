@@ -889,3 +889,11 @@
 {"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-06-04 22:29:19"}
 {"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-06-04 22:29:19"}
 {"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-06-04 22:50:55"}
+{"environment":"development","level":"info","message":"MongoDB connected: ac-plrf0xx-shard-00-02.b3hwibu.mongodb.net","service":"sheCares-api","timestamp":"2025-06-05 12:55:22"}
+{"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-06-05 12:55:22"}
+{"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-06-05 12:55:22"}
+{"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-06-05 12:55:57"}
+{"environment":"development","level":"info","message":"MongoDB connected: ac-plrf0xx-shard-00-00.b3hwibu.mongodb.net","service":"sheCares-api","timestamp":"2025-06-05 12:56:03"}
+{"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-06-05 12:56:03"}
+{"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-06-05 12:56:03"}
+{"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-06-05 12:56:07"}

@@ -15,8 +15,8 @@ const env = process.env.NODE_ENV || 'development';
  */
 const mongoUris = {
 	development: process.env.MONGODB_URI_DEV || 'mongodb+srv://nifemijoseph8:YAZkXusPujggRnLa@joecluster.b3hwibu.mongodb.net/She-cares?retryWrites=true&w=majority&appName=JoeCluster',
-	test: process.env.MONGODB_URI_TEST || 'mongodb://localhost:27017/shecaresmarket_test',
-	production: process.env.MONGODB_URI || 'mongodb://localhost:27017/shecaresmarket'
+	test: process.env.MONGODB_URI_TEST || 'mongodb+srv://nifemijoseph8:YAZkXusPujggRnLa@joecluster.b3hwibu.mongodb.net/She-cares?retryWrites=true&w=majority&appName=JoeCluster',
+	production: process.env.MONGODB_URI || 'mongodb+srv://nifemijoseph8:YAZkXusPujggRnLa@joecluster.b3hwibu.mongodb.net/She-cares?retryWrites=true&w=majority&appName=JoeCluster'
 };
 
 /**
