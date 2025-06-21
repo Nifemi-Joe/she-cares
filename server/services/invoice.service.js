@@ -53,7 +53,7 @@ class InvoiceService {
 				productId: item.productId || undefined, // Convert empty string to undefined
 				name: item.name,
 				quantity: parseFloat(item.quantity),
-				unit: item.unit || 'piece',
+				stockUnit: item.stockUnit || 'piece',
 				unitPrice: parseFloat(item.unitPrice),
 				totalPrice: parseFloat(item.quantity) * parseFloat(item.unitPrice)
 			}));
@@ -419,7 +419,7 @@ class InvoiceService {
 				productId: item.productId,
 				name: item.name,
 				quantity: parseFloat(item.quantity),
-				unit: item.unit || 'piece',
+				stockUnit: item.stockUnit || 'piece',
 				unitPrice: parseFloat(item.unitPrice),
 				totalPrice: parseFloat(item.quantity) * parseFloat(item.unitPrice)
 			};

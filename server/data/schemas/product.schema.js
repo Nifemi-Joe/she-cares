@@ -38,7 +38,7 @@ const ProductSchema = new mongoose.Schema({
 	},
 	pricingUnit: {
 		type: String,
-		enum: ['each', 'kg', 'g', 'lb', 'oz', 'l', 'ml', 'basket', 'portion', 'piece', 'bunch'],
+		enum: ['each', 'kg', 'g', 'lb', 'oz', 'l', 'ml', 'basket', 'portion', 'piece', 'bunch', 'pack', 'paint'],
 		default: 'each'
 	},
 	costPrice: {
@@ -52,7 +52,7 @@ const ProductSchema = new mongoose.Schema({
 	},
 	stockUnit: {
 		type: String,
-		enum: ['each', 'kg', 'g', 'lb', 'oz', 'l', 'ml', 'basket', 'portion', 'piece', 'bunch'],
+		enum: ['each', 'kg', 'g', 'lb', 'oz', 'l', 'ml', 'basket', 'portion', 'piece', 'bunch', 'pack', 'paint'],
 		default: 'each'
 	},
 	lowStockThreshold: {

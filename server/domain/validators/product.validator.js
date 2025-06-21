@@ -42,8 +42,8 @@ class ProductValidator {
 		}
 
 		// Unit validation
-		if (!productData.unit || productData.unit.trim() === '') {
-			errors.unit = 'Unit of measure is required (e.g., piece, basket, kg)';
+		if (!productData.stockUnit || productData.stockUnit.trim() === '') {
+			errors.stockUnit = 'Unit of measure is required (e.g., piece, basket, kg)';
 		}
 
 		// Optional fields validation
