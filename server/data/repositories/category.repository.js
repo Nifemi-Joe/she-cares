@@ -21,6 +21,24 @@ class CategoryRepository extends BaseRepository {
 	}
 
 	/**
+	 * Find category by ID
+	 * @param {string} id - Category ID
+	 * @returns {Promise<Category|null>} Category or null if not found
+	 */
+	async findById(id) {
+		try {
+			const category = await this.model.findById(id).exec();
+			return category ? this._toModel(category) : null;
+		} catch (error) {
+			// Handle invalid ObjectId format
+			if (error.name === 'CastError') {
+				return null;
+			}
+			throw new DatabaseError(`Error finding category by ID: ${error.message}`);
+		}
+	}
+
+	/**
 	 * Find all categories
 	 * @returns {Promise<Array<Category>>} List of all categories
 	 */
@@ -62,7 +80,6 @@ class CategoryRepository extends BaseRepository {
 		}
 	}
 
-
 	/**
 	 * Find categories by parent ID
 	 * @param {string|null} parentId - Parent category ID, null for root categories
@@ -76,7 +93,6 @@ class CategoryRepository extends BaseRepository {
 			throw new DatabaseError(`Error finding categories by parent: ${error.message}`);
 		}
 	}
-
 
 	/**
 	 * Get category tree (hierarchical structure)

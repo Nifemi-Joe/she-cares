@@ -969,3 +969,152 @@
 {"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-06-12 05:10:01"}
 {"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-06-12 09:34:07"}
 {"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-06-12 09:35:27"}
+{"environment":"development","level":"info","message":"MongoDB connected: ac-plrf0xx-shard-00-01.b3hwibu.mongodb.net","service":"sheCares-api","timestamp":"2025-07-04 13:25:33"}
+{"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-07-04 13:25:33"}
+{"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-07-04 13:25:33"}
+{"environment":"development","level":"error","message":"this.productRepository.countDocuments is not a function","method":"GET","path":"/api/products","service":"sheCares-api","stack":"TypeError: this.productRepository.countDocuments is not a function\n    at ProductService._getProductsWithFind (/Users/mac/WebstormProjects/she-cares/server/services/product.service.js:239:40)\n    at ProductService.getProducts (/Users/mac/WebstormProjects/she-cares/server/services/product.service.js:121:23)\n    at ProductController.getProducts (/Users/mac/WebstormProjects/she-cares/server/routes/controllers/product.controller.js:70:45)\n    at /Users/mac/WebstormProjects/she-cares/server/routes/api/product.routes.js:41:55\n    at Layer.handleRequest (/Users/mac/WebstormProjects/she-cares/server/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/mac/WebstormProjects/she-cares/server/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/mac/WebstormProjects/she-cares/server/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/mac/WebstormProjects/she-cares/server/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/mac/WebstormProjects/she-cares/server/node_modules/router/lib/layer.js:152:17)\n    at /Users/mac/WebstormProjects/she-cares/server/node_modules/router/index.js:295:15","statusCode":500,"timestamp":"2025-07-04 14:18:47"}
+{"environment":"development","level":"error","message":"this.productRepository.countDocuments is not a function","method":"GET","path":"/api/products","service":"sheCares-api","stack":"TypeError: this.productRepository.countDocuments is not a function\n    at ProductService._getProductsWithFind (/Users/mac/WebstormProjects/she-cares/server/services/product.service.js:239:40)\n    at ProductService.getProducts (/Users/mac/WebstormProjects/she-cares/server/services/product.service.js:121:23)\n    at ProductController.getProducts (/Users/mac/WebstormProjects/she-cares/server/routes/controllers/product.controller.js:70:45)\n    at /Users/mac/WebstormProjects/she-cares/server/routes/api/product.routes.js:41:55\n    at Layer.handleRequest (/Users/mac/WebstormProjects/she-cares/server/node_modules/router/lib/layer.js:152:17)\n    at next (/Users/mac/WebstormProjects/she-cares/server/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/Users/mac/WebstormProjects/she-cares/server/node_modules/router/lib/route.js:117:3)\n    at handle (/Users/mac/WebstormProjects/she-cares/server/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/Users/mac/WebstormProjects/she-cares/server/node_modules/router/lib/layer.js:152:17)\n    at /Users/mac/WebstormProjects/she-cares/server/node_modules/router/index.js:295:15","statusCode":500,"timestamp":"2025-07-04 14:18:47"}
+{"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-07-04 14:19:32"}
+{"environment":"development","level":"info","message":"MongoDB connected: ac-plrf0xx-shard-00-00.b3hwibu.mongodb.net","service":"sheCares-api","timestamp":"2025-07-04 14:19:37"}
+{"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-07-04 14:19:37"}
+{"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-07-04 14:19:37"}
+{"environment":"development","level":"error","message":"Category not found","method":"GET","path":"/api/categories/683a9d8f58a1321e528dc492/products","service":"sheCares-api","stack":"Error: Category not found\n    at CategoryService.getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/services/category.service.js:146:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/routes/controllers/category.controller.js:159:21)","statusCode":404,"timestamp":"2025-07-04 14:20:34"}
+{"environment":"development","level":"error","message":"Category not found","method":"GET","path":"/api/categories/683a9d8f58a1321e528dc492/products","service":"sheCares-api","stack":"Error: Category not found\n    at CategoryService.getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/services/category.service.js:146:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/routes/controllers/category.controller.js:159:21)","statusCode":404,"timestamp":"2025-07-04 14:20:34"}
+{"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-07-04 15:09:45"}
+{"environment":"development","level":"info","message":"MongoDB connected: ac-plrf0xx-shard-00-02.b3hwibu.mongodb.net","service":"sheCares-api","timestamp":"2025-07-04 15:09:49"}
+{"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-07-04 15:09:49"}
+{"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-07-04 15:09:49"}
+{"environment":"development","level":"error","message":"Category not found","method":"GET","path":"/api/categories/683a9d8f58a1321e528dc492/products","service":"sheCares-api","stack":"Error: Category not found\n    at CategoryService.getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/services/category.service.js:152:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/routes/controllers/category.controller.js:159:21)","statusCode":404,"timestamp":"2025-07-04 15:09:58"}
+{"environment":"development","level":"error","message":"Category not found","method":"GET","path":"/api/categories/683a9d8f58a1321e528dc492/products","service":"sheCares-api","stack":"Error: Category not found\n    at CategoryService.getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/services/category.service.js:152:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/routes/controllers/category.controller.js:159:21)","statusCode":404,"timestamp":"2025-07-04 15:09:58"}
+{"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-07-04 15:10:54"}
+{"environment":"development","level":"info","message":"MongoDB connected: ac-plrf0xx-shard-00-02.b3hwibu.mongodb.net","service":"sheCares-api","timestamp":"2025-07-04 15:11:23"}
+{"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-07-04 15:11:23"}
+{"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-07-04 15:11:23"}
+{"environment":"development","level":"error","message":"Category not found","method":"GET","path":"/api/categories/683a9d8f58a1321e528dc492/products","service":"sheCares-api","stack":"Error: Category not found\n    at CategoryService.getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/services/category.service.js:152:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/routes/controllers/category.controller.js:160:21)","statusCode":404,"timestamp":"2025-07-04 15:13:16"}
+{"environment":"development","level":"error","message":"Category not found","method":"GET","path":"/api/categories/683a9d8f58a1321e528dc492/products","service":"sheCares-api","stack":"Error: Category not found\n    at CategoryService.getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/services/category.service.js:152:10)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async getProductsByCategory (/Users/mac/WebstormProjects/she-cares/server/routes/controllers/category.controller.js:160:21)","statusCode":404,"timestamp":"2025-07-04 15:13:16"}
+{"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-07-04 15:13:47"}
+{"environment":"development","level":"info","message":"MongoDB connected: ac-plrf0xx-shard-00-02.b3hwibu.mongodb.net","service":"sheCares-api","timestamp":"2025-07-04 15:13:50"}
+{"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-07-04 15:13:50"}
+{"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-07-04 15:13:50"}
+{"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-07-04 15:18:00"}
+{"environment":"development","level":"info","message":"MongoDB connected: ac-plrf0xx-shard-00-01.b3hwibu.mongodb.net","service":"sheCares-api","timestamp":"2025-07-04 15:18:04"}
+{"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-07-04 15:18:04"}
+{"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-07-04 15:18:04"}
+{"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-07-04 15:18:39"}
+{"environment":"development","level":"info","message":"MongoDB connected: ac-plrf0xx-shard-00-01.b3hwibu.mongodb.net","service":"sheCares-api","timestamp":"2025-07-04 15:18:43"}
+{"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-07-04 15:18:43"}
+{"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-07-04 15:18:43"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-04 16:28:25"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-04 17:14:08"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-04 18:07:44"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-04 18:21:37"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-04 22:35:13"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 01:32:24"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 10:07:09"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 10:17:30"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 12:18:45"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 12:23:51"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 12:50:46"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 13:10:25"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 13:13:39"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 13:16:58"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 13:19:47"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 13:29:55"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 13:33:24"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 14:04:31"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 15:05:10"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 15:22:05"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 16:22:52"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 16:35:09"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 16:47:43"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 17:00:45"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 17:16:55"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 17:35:58"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 17:39:17"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 17:40:48"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 18:19:48"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 18:40:54"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 18:53:41"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 18:57:27"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 23:46:21"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 23:54:26"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-05 23:56:37"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 00:01:07"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 00:09:44"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 00:15:56"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 00:18:17"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 00:20:47"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 00:40:28"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 00:43:36"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 00:45:12"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 00:50:06"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 00:56:00"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 01:55:08"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 02:24:45"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 02:34:26"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 02:38:11"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 02:41:16"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 03:06:02"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 03:32:30"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 03:33:52"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 04:39:34"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 04:42:30"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 06:36:21"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 06:44:17"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 07:39:55"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 08:17:10"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 08:20:04"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 08:26:21"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 08:41:55"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 08:55:27"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 08:56:36"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 09:02:31"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 09:30:32"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 10:03:04"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 10:33:09"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 10:39:11"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 10:51:41"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 10:58:37"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 11:01:59"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 11:09:14"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 11:25:50"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 11:47:56"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 12:06:50"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 12:13:57"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 12:44:44"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 13:04:38"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 13:07:25"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 13:11:31"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 13:15:07"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 13:23:05"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 13:31:49"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 13:35:00"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 13:37:14"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 14:03:48"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 14:09:30"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 14:18:02"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 14:20:54"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 14:50:23"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 14:57:48"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 14:59:43"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 15:11:38"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 15:15:52"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 15:19:02"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 15:37:39"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 15:51:36"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 16:05:30"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 16:18:20"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 16:50:58"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 18:07:29"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 19:08:36"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 20:09:45"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 21:10:36"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-06 22:11:40"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-07 10:41:47"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-07 19:10:11"}
+{"environment":"development","level":"warn","message":"MongoDB disconnected","service":"sheCares-api","timestamp":"2025-07-07 19:12:56"}
+{"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-07-07 19:35:12"}
+{"environment":"development","level":"info","message":"MongoDB connected: ac-plrf0xx-shard-00-01.b3hwibu.mongodb.net","service":"sheCares-api","timestamp":"2025-07-07 19:35:24"}
+{"environment":"development","level":"info","message":"🚀 Server listening on port 7009 in development mode","service":"sheCares-api","timestamp":"2025-07-07 19:35:24"}
+{"environment":"development","level":"info","message":"API docs available at http://localhost:7009/api-docs","service":"sheCares-api","timestamp":"2025-07-07 19:35:24"}
+{"environment":"development","level":"info","message":"🔄 Received termination signal. Shutting down gracefully...","service":"sheCares-api","timestamp":"2025-07-08 13:12:26"}

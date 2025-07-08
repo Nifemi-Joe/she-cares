@@ -139,15 +139,25 @@ class CategoryService {
 	 * @param {Object} options - Query options (pagination, sorting)
 	 * @returns {Array} List of products in the category
 	 */
+
 	async getProductsByCategory(categoryId, options = {}) {
+		console.log('Looking for category with ID:', categoryId);
+
 		// Check if category exists
 		const category = await categoryRepository.findById(categoryId);
+		console.log('Found category:', category);
+
 		if (!category) {
+			console.log('Category not found for ID:', categoryId);
 			throw new NotFoundError('Category not found');
 		}
 
+		console.log('Category found, fetching products...');
 		const productRepository = require('../data/repositories/product.repository');
-		return productRepository.findByCategoryId(categoryId, options);
+		const products = await productRepository.findByCategoryId(categoryId, options);
+		console.log('Found products:', products.length);
+
+		return products;
 	}
 }
 

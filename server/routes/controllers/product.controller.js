@@ -24,12 +24,15 @@ class ProductController {
 	 * @param {Object} res - Express response object
 	 * @param {Function} next - Express next middleware function
 	 */
+	/**
+	 * OPTIMIZED CONTROLLER
+	 */
 	async getProducts(req, res, next) {
 		try {
-			// Extract query parameters
+			// Extract query parameters with validation
 			const filters = {
 				categoryId: req.query.categoryId,
-				search: req.query.search,
+				search: req.query.search?.trim(),
 				isAvailable: req.query.available !== undefined
 					? req.query.available === 'true'
 					: undefined,
@@ -39,13 +42,13 @@ class ProductController {
 				priceMax: req.query.priceMax !== undefined
 					? Number(req.query.priceMax)
 					: undefined,
-				tags: req.query.tags ? req.query.tags.split(',') : undefined
+				tags: req.query.tags ? req.query.tags.split(',').map(t => t.trim()) : undefined
 			};
 
-			// Parse pagination options
+			// Parse pagination options with limits
 			const options = {
-				page: req.query.page ? parseInt(req.query.page, 10) : 1,
-				limit: req.query.limit ? parseInt(req.query.limit, 10) : 10,
+				page: Math.max(1, parseInt(req.query.page, 10) || 1),
+				limit: Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10)), // Cap at 100
 				sort: {}
 			};
 
@@ -66,6 +69,8 @@ class ProductController {
 			// Get products from service
 			const result = await this.productService.getProducts(filters, options);
 
+			// Set appropriate cache headers
+			res.set('Cache-Control', 'public, max-age=300'); // 5 minutes cache
 			res.status(200).json({
 				responseCode: 200,
 				responseMessage: 'Products retrieved successfully.',

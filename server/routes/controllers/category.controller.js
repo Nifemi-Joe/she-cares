@@ -134,7 +134,7 @@ class CategoryController {
 	 */
 	async getProductsByCategory(req, res, next) {
 		try {
-			const { categoryId } = req.params;
+			const { id } = req.params;
 			const {
 				page = 1,
 				limit = 10,
@@ -156,11 +156,11 @@ class CategoryController {
 				options.filters.isAvailable = available === 'true';
 			}
 
-			const products = await categoryService.getProductsByCategory(categoryId, options);
-
+			const products = await categoryService.getProductsByCategory(id, options);
+			console.log(products)
 			res.status(200).json({
 				responseCode: 200,
-				responseData: products.items,
+				responseData: products,
 				responseMessage: 'Products retrieved successfully.',
 				pagination: {
 					page: options.page,

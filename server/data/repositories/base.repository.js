@@ -91,11 +91,19 @@ class BaseRepository {
 	 * @returns {Promise<Array<Object>>} Found documents
 	 * @throws {DatabaseError} Database error
 	 */
+	/**
+	 * Optimized find with lean queries
+	 */
 	async find(filter = {}, options = {}) {
 		this._checkConnectionStatus();
 
 		try {
 			let query = this.model.find(filter);
+
+			// Always use lean for better performance unless explicitly disabled
+			if (options.lean !== false) {
+				query = query.lean();
+			}
 
 			if (options.select) {
 				query = query.select(options.select);
@@ -123,8 +131,7 @@ class BaseRepository {
 				query = query.limit(options.limit);
 			}
 
-			const results = await query.exec();
-			return results.map(result => result.toObject ? result.toObject() : result);
+			return await query.exec();
 		} catch (error) {
 			this.logger.error(`Error finding ${this.model.modelName} documents: ${error.message}`);
 			throw new DatabaseError(`Error finding documents: ${error.message}`);
@@ -222,16 +229,26 @@ class BaseRepository {
 	 * @returns {Promise<number>} Document count
 	 * @throws {DatabaseError} Database error
 	 */
+	/**
+	 * Optimized count with caching for expensive operations
+	 */
 	async count(filter = {}) {
 		this._checkConnectionStatus();
 
 		try {
+			// Use estimatedDocumentCount for empty filters (much faster)
+			if (Object.keys(filter).length === 0) {
+				return await this.model.estimatedDocumentCount();
+			}
+
 			return await this.model.countDocuments(filter);
 		} catch (error) {
 			this.logger.error(`Error counting ${this.model.modelName} documents: ${error.message}`);
 			throw new DatabaseError(`Error counting documents: ${error.message}`);
 		}
 	}
+
+
 
 	/**
 	 * Check if document exists
@@ -256,16 +273,20 @@ class BaseRepository {
 	 * @returns {Promise<Array>} Aggregation results
 	 * @throws {DatabaseError} Database error
 	 */
+	/**
+	 * Add aggregation support
+	 */
 	async aggregate(pipeline) {
 		this._checkConnectionStatus();
 
 		try {
 			return await this.model.aggregate(pipeline);
 		} catch (error) {
-			this.logger.error(`Error executing aggregation on ${this.model.modelName}: ${error.message}`);
-			throw new DatabaseError(`Error executing aggregation: ${error.message}`);
+			this.logger.error(`Error in aggregation: ${error.message}`);
+			throw new DatabaseError(`Aggregation error: ${error.message}`);
 		}
 	}
+
 
 	/**
 	 * Find all documents

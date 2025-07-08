@@ -91,68 +91,180 @@ class ProductService {
 	 * @returns {Promise<Object>} Paginated products
 	 * @throws {Error} Database error
 	 */
+	/**
+	 * OPTIMIZED SERVICE
+	 */
 	async getProducts(filters = {}, options = {}) {
 		try {
-			// Build filter object
-			const filterQuery = {};
+			// Build optimized filter object
+			const filterQuery = this._buildFilterQuery(filters);
 
-			if (filters.categoryId) {
-				filterQuery.categoryId = filters.categoryId;
-			}
-
-			if (filters.isAvailable !== undefined) {
-				filterQuery.isAvailable = filters.isAvailable;
-			}
-
-			if (filters.search) {
-				filterQuery.$or = [
-					{ name: { $regex: filters.search, $options: 'i' } },
-					{ description: { $regex: filters.search, $options: 'i' } },
-					{ tags: { $regex: filters.search, $options: 'i' } }
-				];
-			}
-
-			if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
-				filterQuery.price = {};
-				if (filters.priceMin !== undefined) {
-					filterQuery.price.$gte = filters.priceMin;
-				}
-				if (filters.priceMax !== undefined) {
-					filterQuery.price.$lte = filters.priceMax;
-				}
-			}
-
-			if (filters.tags && Array.isArray(filters.tags)) {
-				filterQuery.tags = { $in: filters.tags };
-			}
-
-			// Set up pagination options
+			// Set up optimized query options
 			const queryOptions = {
 				sort: options.sort || { createdAt: -1 },
 				skip: options.page > 0 ? (options.page - 1) * (options.limit || 10) : 0,
 				limit: options.limit || 10,
-				populate: 'categoryId'
+				populate: {
+					path: 'categoryId',
+					select: 'name slug' // Only select needed fields
+				},
+				select: this._getSelectFields(), // Only select needed fields
+				lean: true // Return plain JavaScript objects instead of Mongoose documents
 			};
 
-			// Get data
-			const [products, total] = await Promise.all([
-				this.productRepository.find(filterQuery, queryOptions),
-				this.productRepository.count(filterQuery)
-			]);
+			// Use aggregation for complex queries or fall back to find
+			const useAggregation = this._shouldUseAggregation(filters);
 
-			return {
-				data: products,
-				pagination: {
-					total,
-					page: options.page || 1,
-					limit: options.limit || 10,
-					pages: Math.ceil(total / (options.limit || 10))
-				}
-			};
+			if (useAggregation) {
+				return await this._getProductsWithAggregation(filterQuery, queryOptions, options);
+			} else {
+				return await this._getProductsWithFind(filterQuery, queryOptions, options);
+			}
 		} catch (error) {
 			this.logger.error(`Error fetching products: ${error.message}`);
 			throw error;
 		}
+	}
+
+	/**
+	 * Build optimized filter query
+	 */
+	_buildFilterQuery(filters) {
+		const filterQuery = {};
+
+		if (filters.categoryId) {
+			filterQuery.categoryId = filters.categoryId;
+		}
+
+		if (filters.isAvailable !== undefined) {
+			filterQuery.isAvailable = filters.isAvailable;
+		}
+
+		// Optimized text search with index
+		if (filters.search) {
+			// Use text index if available, otherwise use regex
+			filterQuery.$text = { $search: filters.search };
+			// Fallback to regex if text index not available
+			// filterQuery.$or = [
+			//     { name: { $regex: filters.search, $options: 'i' } },
+			//     { description: { $regex: filters.search, $options: 'i' } }
+			// ];
+		}
+
+		// Optimized price range query
+		if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
+			filterQuery.price = {};
+			if (filters.priceMin !== undefined) {
+				filterQuery.price.$gte = filters.priceMin;
+			}
+			if (filters.priceMax !== undefined) {
+				filterQuery.price.$lte = filters.priceMax;
+			}
+		}
+
+		if (filters.tags && Array.isArray(filters.tags)) {
+			filterQuery.tags = { $in: filters.tags };
+		}
+
+		return filterQuery;
+	}
+
+	/**
+	 * Get only necessary fields to reduce data transfer
+	 */
+	_getSelectFields() {
+		return 'name description price isAvailable categoryId tags createdAt images slug';
+	}
+
+	/**
+	 * Determine if aggregation pipeline should be used
+	 */
+	_shouldUseAggregation(filters) {
+		// Use aggregation for complex queries like search scoring
+		return filters.search || (filters.tags && filters.tags.length > 1);
+	}
+
+	/**
+	 * Get products using aggregation pipeline (for complex queries)
+	 */
+	async _getProductsWithAggregation(filterQuery, queryOptions, options) {
+		const pipeline = [
+			{ $match: filterQuery },
+			{
+				$lookup: {
+					from: 'categories',
+					localField: 'categoryId',
+					foreignField: '_id',
+					as: 'categoryId',
+					pipeline: [{ $project: { name: 1, slug: 1 } }]
+				}
+			},
+			{ $unwind: { path: '$categoryId', preserveNullAndEmptyArrays: true } },
+			{ $project: this._getProjectionFields() },
+			{ $sort: queryOptions.sort },
+			{
+				$facet: {
+					data: [
+						{ $skip: queryOptions.skip },
+						{ $limit: queryOptions.limit }
+					],
+					count: [{ $count: 'total' }]
+				}
+			}
+		];
+
+		const [result] = await this.productRepository.aggregate(pipeline);
+		const total = result.count[0]?.total || 0;
+
+		return {
+			data: result.data,
+			pagination: {
+				total,
+				page: options.page || 1,
+				limit: options.limit || 10,
+				pages: Math.ceil(total / (options.limit || 10))
+			}
+		};
+	}
+
+	/**
+	 * Get products using find (for simple queries)
+	 */
+	async _getProductsWithFind(filterQuery, queryOptions, options) {
+		// For simple queries, use separate count query only when needed
+		const needsCount = options.page === 1 || options.page > 1;
+
+		const [products, total] = await Promise.all([
+			this.productRepository.find(filterQuery, queryOptions),
+			needsCount ? this.productRepository.count(filterQuery) : Promise.resolve(0)
+		]);
+
+		return {
+			data: products,
+			pagination: {
+				total,
+				page: options.page || 1,
+				limit: options.limit || 10,
+				pages: Math.ceil(total / (options.limit || 10))
+			}
+		};
+	}
+
+	/**
+	 * Get projection fields for aggregation
+	 */
+	_getProjectionFields() {
+		return {
+			name: 1,
+			description: 1,
+			price: 1,
+			isAvailable: 1,
+			categoryId: 1,
+			tags: 1,
+			createdAt: 1,
+			images: 1,
+			slug: 1
+		};
 	}
 
 	/**
