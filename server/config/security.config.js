@@ -8,30 +8,30 @@
  * @author SheCares Development Team
  */
 
-const env = process.env.NODE_ENV || 'development';
+const env = process.env.NODE_ENV;
 
 /**
  * JWT (JSON Web Token) configuration
  */
 const jwtConfig = {
 	development: {
-		secret: process.env.JWT_SECRET || 'dev-secret-key-change-in-production',
-		expiresIn: process.env.JWT_EXPIRES_IN || '1d',
-		refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+		secret: process.env.JWT_SECRET,
+		expiresIn: process.env.JWT_EXPIRES_IN,
+		refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
 		algorithm: 'HS256',
 		issuer: 'shecaresmarket-dev'
 	},
 	test: {
-		secret: process.env.JWT_SECRET || 'test-secret-key',
-		expiresIn: process.env.JWT_EXPIRES_IN || '1h',
-		refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '1d',
+		secret: process.env.JWT_SECRET,
+		expiresIn: process.env.JWT_EXPIRES_IN,
+		refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
 		algorithm: 'HS256',
 		issuer: 'shecaresmarket-test'
 	},
 	production: {
 		secret: process.env.JWT_SECRET,
-		expiresIn: process.env.JWT_EXPIRES_IN || '8h',
-		refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+		expiresIn: process.env.JWT_EXPIRES_IN,
+		refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
 		algorithm: 'HS256',
 		issuer: 'shecaresmarket'
 	}

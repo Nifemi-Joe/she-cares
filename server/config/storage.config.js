@@ -9,27 +9,27 @@
  */
 
 const path = require('path');
-const env = process.env.NODE_ENV || 'development';
+const env = process.env.NODE_ENV;
 
 /**
  * Local storage configuration
  */
 const localStorageConfig = {
 	development: {
-		rootDir: process.env.LOCAL_STORAGE_ROOT || path.join(process.cwd(), 'uploads'),
-		baseUrl: process.env.LOCAL_STORAGE_URL || 'http://localhost:5000/uploads',
+		rootDir: process.env.LOCAL_STORAGE_ROOT,
+		baseUrl: process.env.LOCAL_STORAGE_URL,
 		maxFileSize: 5 * 1024 * 1024, // 5MB
 		permissions: 0o755
 	},
 	test: {
-		rootDir: process.env.LOCAL_STORAGE_ROOT || path.join(process.cwd(), 'test-uploads'),
-		baseUrl: process.env.LOCAL_STORAGE_URL || 'http://localhost:5000/uploads',
+		rootDir: process.env.LOCAL_STORAGE_ROOT,
+		baseUrl: process.env.LOCAL_STORAGE_URL,
 		maxFileSize: 5 * 1024 * 1024, // 5MB
 		permissions: 0o755
 	},
 	production: {
-		rootDir: process.env.LOCAL_STORAGE_ROOT || path.join(process.cwd(), 'uploads'),
-		baseUrl: process.env.LOCAL_STORAGE_URL || 'https://shecaresmarket.com/uploads',
+		rootDir: process.env.LOCAL_STORAGE_ROOT,
+		baseUrl: process.env.LOCAL_STORAGE_URL,
 		maxFileSize: 10 * 1024 * 1024, // 10MB
 		permissions: 0o644
 	}
@@ -40,13 +40,13 @@ const localStorageConfig = {
  */
 const cloudStorageConfig = {
 	enabled: process.env.CLOUD_STORAGE_ENABLED === 'true',
-	provider: process.env.CLOUD_STORAGE_PROVIDER || 's3',
-	region: process.env.CLOUD_STORAGE_REGION || 'us-east-1',
+	provider: process.env.CLOUD_STORAGE_PROVIDER,
+	region: process.env.CLOUD_STORAGE_REGION,
 	credentials: {
 		accessKeyId: process.env.CLOUD_STORAGE_ACCESS_KEY,
 		secretAccessKey: process.env.CLOUD_STORAGE_SECRET_KEY
 	},
-	bucket: process.env.CLOUD_STORAGE_BUCKET || 'shecaresmarket',
+	bucket: process.env.CLOUD_STORAGE_BUCKET,
 	endPoint: process.env.CLOUD_STORAGE_ENDPOINT,
 	baseUrl: process.env.CLOUD_STORAGE_BASE_URL,
 	maxFileSize: 10 * 1024 * 1024 // 10MB

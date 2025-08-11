@@ -14,9 +14,9 @@ const env = process.env.NODE_ENV || 'development';
  * MongoDB connection URI for different environments
  */
 const mongoUris = {
-	development: process.env.MONGODB_URI_DEV || 'mongodb+srv://nifemijoseph8:YAZkXusPujggRnLa@joecluster.b3hwibu.mongodb.net/She-cares?retryWrites=true&w=majority&appName=JoeCluster',
-	test: process.env.MONGODB_URI_TEST || 'mongodb+srv://nifemijoseph8:YAZkXusPujggRnLa@joecluster.b3hwibu.mongodb.net/She-cares?retryWrites=true&w=majority&appName=JoeCluster',
-	production: process.env.MONGODB_URI || 'mongodb+srv://nifemijoseph8:YAZkXusPujggRnLa@joecluster.b3hwibu.mongodb.net/She-cares?retryWrites=true&w=majority&appName=JoeCluster'
+	development: process.env.MONGODB_URI_DEV,
+	test: process.env.MONGODB_URI_TEST,
+	production: process.env.MONGODB_URI
 };
 
 /**
