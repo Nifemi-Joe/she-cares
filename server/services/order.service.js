@@ -150,7 +150,8 @@ class OrderService {
 
 			// Get client information for emails
 			const clientInfo = await this.getClientInfo(savedOrder.clientId);
-			console.log(clientInfo)
+			console.log(clientInfo);
+
 			// Create invoice for the order
 			const invoice = await this.createOrderInvoice(savedOrder, clientInfo);
 
@@ -170,6 +171,91 @@ class OrderService {
 			this.logger.error(`Error creating order: ${error.message}`);
 			throw error;
 		}
+	}
+
+	/**
+	 * Get all orders with filtering and pagination
+	 * @param {Object} filters - Filter criteria
+	 * @param {Object} options - Query options
+	 * @returns {Promise<Object>} Paginated orders
+	 * @throws {Error} Database error
+	 */
+	async getOrders(filters = {}, options = {}) {
+		try {
+			// Clean up filters - remove undefined values
+			const cleanFilters = {};
+			Object.keys(filters).forEach(key => {
+				if (filters[key] !== undefined && filters[key] !== null && filters[key] !== '') {
+					cleanFilters[key] = filters[key];
+				}
+			});
+
+			// Handle date range filters
+			if (cleanFilters.createdAfter || cleanFilters.createdBefore) {
+				cleanFilters.createdAt = {};
+
+				if (cleanFilters.createdAfter) {
+					cleanFilters.createdAt.$gte = new Date(cleanFilters.createdAfter);
+					delete cleanFilters.createdAfter;
+				}
+
+				if (cleanFilters.createdBefore) {
+					cleanFilters.createdAt.$lte = new Date(cleanFilters.createdBefore);
+					delete cleanFilters.createdBefore;
+				}
+			}
+
+			// Handle amount range filters
+			if (cleanFilters.minTotal || cleanFilters.maxTotal) {
+				cleanFilters.totalAmount = {};
+
+				if (cleanFilters.minTotal) {
+					cleanFilters.totalAmount.$gte = cleanFilters.minTotal;
+					delete cleanFilters.minTotal;
+				}
+
+				if (cleanFilters.maxTotal) {
+					cleanFilters.totalAmount.$lte = cleanFilters.maxTotal;
+					delete cleanFilters.maxTotal;
+				}
+			}
+
+			// Set default options
+			const queryOptions = {
+				page: options.page || 1,
+				limit: options.limit || 10,
+				sort: this._convertSortObjectToString(options.sort || { createdAt: -1 })
+			};
+
+			// Use repository method
+			return await this.orderRepository.getOrders({
+				...queryOptions,
+				...cleanFilters
+			});
+
+		} catch (error) {
+			this.logger.error(`Error fetching orders: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Helper method to convert sort object to string format
+	 * @param {Object} sortObj - Sort object (e.g., { createdAt: -1, name: 1 })
+	 * @returns {string} Sort string (e.g., '-createdAt,+name')
+	 * @private
+	 */
+	_convertSortObjectToString(sortObj) {
+		if (typeof sortObj === 'string') return sortObj;
+
+		return Object.entries(sortObj)
+			.map(([key, value]) => {
+				if (value === -1 || value === 'desc' || value === 'DESC') {
+					return `-${key}`;
+				}
+				return `+${key}`;
+			})
+			.join(',');
 	}
 
 	/**
@@ -195,6 +281,271 @@ class OrderService {
 		});
 
 		return `ORD-${year}${month}${day}-${(todayOrdersCount + 1).toString().padStart(4, '0')}`;
+	}
+
+	/**
+	 * Get order by ID
+	 * @param {string} orderId - Order ID
+	 * @returns {Promise<Object>} Order data
+	 * @throws {Error} Not found or database error
+	 */
+	async getOrderById(orderId) {
+		try {
+			const order = await this.orderRepository.findById(orderId);
+
+			if (!order) {
+				throw new Error(`Order with ID ${orderId} not found`);
+			}
+
+			return order;
+		} catch (error) {
+			this.logger.error(`Error fetching order ${orderId}: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Update an order
+	 * @param {string} orderId - Order ID
+	 * @param {Object} updateData - Updated order data
+	 * @returns {Promise<Object>} Updated order
+	 * @throws {Error} Not found or database error
+	 */
+	async updateOrder(orderId, updateData) {
+		try {
+			// Verify order exists
+			const existingOrder = await this.orderRepository.findById(orderId);
+			if (!existingOrder) {
+				throw new Error(`Order with ID ${orderId} not found`);
+			}
+
+			// Prevent changing client
+			if (updateData.clientId && updateData.clientId !== existingOrder.clientId) {
+				throw new Error('Cannot change order client');
+			}
+
+			// Update timestamp
+			updateData.updatedAt = new Date();
+
+			// Update order
+			const updatedOrder = await this.orderRepository.update(orderId, updateData);
+
+			// Dispatch event
+			this.eventDispatcher.dispatch('order:updated', {
+				orderId: updatedOrder.id,
+				updatedFields: Object.keys(updateData),
+				timestamp: new Date()
+			});
+
+			return updatedOrder;
+		} catch (error) {
+			this.logger.error(`Error updating order ${orderId}: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get orders by client ID
+	 * @param {string} clientId - Client ID
+	 * @param {Object} options - Query options
+	 * @returns {Promise<Object>} Paginated orders
+	 * @throws {Error} Database error
+	 */
+	async getClientOrders(clientId, options = {}) {
+		try {
+			// Verify client exists in both User and Client schemas
+			await this.validateClientExists(clientId);
+
+			return this.getOrders({ clientId }, options);
+		} catch (error) {
+			this.logger.error(`Error fetching orders for client ${clientId}: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get order statistics
+	 * @param {Object} filters - Optional date filters
+	 * @returns {Promise<Object>} Order statistics
+	 * @throws {Error} Database error
+	 */
+	async getOrderStats(filters = {}) {
+		try {
+			return await this.orderRepository.getOrderStats(filters);
+		} catch (error) {
+			this.logger.error(`Error getting order statistics: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get recent orders
+	 * @param {number} limit - Number of orders to return
+	 * @returns {Promise<Array>} Recent orders
+	 * @throws {Error} Database error
+	 */
+	async getRecentOrders(limit = 10) {
+		try {
+			const result = await this.getOrders({}, {
+				limit,
+				sort: { createdAt: -1 }
+			});
+			return result.data;
+		} catch (error) {
+			this.logger.error(`Error fetching recent orders: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get sales data for analytics
+	 * @param {string} period - Time period (e.g., '30d', '7d', '1y')
+	 * @returns {Promise<Object>} Sales data
+	 * @throws {Error} Database error
+	 */
+	async getSalesData(period = '30d') {
+		try {
+			// Calculate date range based on period
+			const endDate = new Date();
+			const startDate = new Date();
+
+			switch (period) {
+				case '7d':
+					startDate.setDate(endDate.getDate() - 7);
+					break;
+				case '30d':
+					startDate.setDate(endDate.getDate() - 30);
+					break;
+				case '90d':
+					startDate.setDate(endDate.getDate() - 90);
+					break;
+				case '1y':
+					startDate.setFullYear(endDate.getFullYear() - 1);
+					break;
+				default:
+					startDate.setDate(endDate.getDate() - 30);
+			}
+
+			// Get orders in the specified period
+			const orders = await this.getOrders({
+				createdAfter: startDate,
+				createdBefore: endDate
+			}, {
+				limit: 1000, // Large limit to get all orders
+				sort: { createdAt: 1 }
+			});
+
+			// Process data for charts
+			const salesData = this._processSalesDataForChart(orders.data, period);
+
+			return {
+				period,
+				data: salesData,
+				totalSales: orders.data.reduce((sum, order) => sum + (order.totalAmount || order.total || 0), 0),
+				totalOrders: orders.data.length
+			};
+
+		} catch (error) {
+			this.logger.error(`Error getting sales data: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Process sales data for chart visualization
+	 * @param {Array} orders - Orders data
+	 * @param {string} period - Time period
+	 * @returns {Array} Processed chart data
+	 * @private
+	 */
+	_processSalesDataForChart(orders, period) {
+		const groupBy = period === '7d' ? 'day' : period === '30d' ? 'day' : 'month';
+		const dataMap = new Map();
+
+		orders.forEach(order => {
+			const date = new Date(order.createdAt);
+			let key;
+
+			if (groupBy === 'day') {
+				key = date.toISOString().split('T')[0]; // YYYY-MM-DD
+			} else {
+				key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
+			}
+
+			if (!dataMap.has(key)) {
+				dataMap.set(key, { date: key, sales: 0, orders: 0 });
+			}
+
+			const data = dataMap.get(key);
+			data.sales += order.totalAmount || order.total || 0;
+			data.orders += 1;
+		});
+
+		return Array.from(dataMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+	}
+
+	/**
+	 * Delete an order
+	 * @param {string} orderId - Order ID
+	 * @returns {Promise<boolean>} Success status
+	 * @throws {Error} Not found or database error
+	 */
+	async deleteOrder(orderId) {
+		try {
+			// Verify order exists
+			const existingOrder = await this.orderRepository.findById(orderId);
+			if (!existingOrder) {
+				throw new Error(`Order with ID ${orderId} not found`);
+			}
+
+			// Only allow deletion of pending orders
+			if (existingOrder.status !== 'pending') {
+				throw new Error('Only pending orders can be deleted');
+			}
+
+			// Delete order
+			await this.orderRepository.delete(orderId);
+
+			// Dispatch event
+			this.eventDispatcher.dispatch('order:deleted', {
+				orderId,
+				timestamp: new Date()
+			});
+
+			return true;
+		} catch (error) {
+			this.logger.error(`Error deleting order ${orderId}: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Cancel an order
+	 * @param {string} orderId - Order ID
+	 * @param {string} reason - Cancellation reason
+	 * @returns {Promise<Object>} Updated order
+	 * @throws {Error} Not found or database error
+	 */
+	async cancelOrder(orderId, reason = '') {
+		try {
+			const order = await this.updateOrder(orderId, {
+				status: 'cancelled',
+				cancelledAt: new Date(),
+				cancelReason: reason
+			});
+
+			// Dispatch event
+			this.eventDispatcher.dispatch('order:cancelled', {
+				orderId,
+				reason,
+				timestamp: new Date()
+			});
+
+			return order;
+		} catch (error) {
+			this.logger.error(`Error cancelling order ${orderId}: ${error.message}`);
+			throw error;
+		}
 	}
 
 	/**
@@ -577,113 +928,6 @@ class OrderService {
 			}
 		}
 	}
-
-	/**
-	 * Get order by ID
-	 * @param {string} orderId - Order ID
-	 * @returns {Promise<Object>} Order data
-	 * @throws {Error} Not found or database error
-	 */
-	async getOrderById(orderId) {
-		try {
-			const order = await this.orderRepository.findById(orderId);
-
-			if (!order) {
-				throw new Error(`Order with ID ${orderId} not found`);
-			}
-
-			return order;
-		} catch (error) {
-			this.logger.error(`Error fetching order ${orderId}: ${error.message}`);
-			throw error;
-		}
-	}
-
-	/**
-	 * Get all orders with filtering and pagination
-	 * @param {Object} filters - Filter criteria
-	 * @param {Object} options - Query options
-	 * @returns {Promise<Object>} Paginated orders
-	 * @throws {Error} Database error
-	 */
-
-	
-	/**
-	 * Helper method to convert sort object to string format
-	 * @param {Object} sortObj - Sort object (e.g., { createdAt: -1, name: 1 })
-	 * @returns {string} Sort string (e.g., '-createdAt,+name')
-	 * @private
-	 */
-	_convertSortObjectToString(sortObj) {
-		if (typeof sortObj === 'string') return sortObj;
-
-		return Object.entries(sortObj)
-			.map(([key, value]) => {
-				if (value === -1 || value === 'desc' || value === 'DESC') {
-					return `-${key}`;
-				}
-				return `+${key}`;
-			})
-			.join(',');
-	}
-
-	/**
-	 * Update an order
-	 * @param {string} orderId - Order ID
-	 * @param {Object} updateData - Updated order data
-	 * @returns {Promise<Object>} Updated order
-	 * @throws {Error} Not found or database error
-	 */
-	async updateOrder(orderId, updateData) {
-		try {
-			// Verify order exists
-			const existingOrder = await this.orderRepository.findById(orderId);
-			if (!existingOrder) {
-				throw new Error(`Order with ID ${orderId} not found`);
-			}
-
-			// Prevent changing client
-			if (updateData.clientId && updateData.clientId !== existingOrder.clientId) {
-				throw new Error('Cannot change order client');
-			}
-
-			// Update timestamp
-			updateData.updatedAt = new Date();
-
-			// Update order
-			const updatedOrder = await this.orderRepository.update(orderId, updateData);
-
-			// Dispatch event
-			this.eventDispatcher.dispatch('order:updated', {
-				orderId: updatedOrder.id,
-				updatedFields: Object.keys(updateData),
-				timestamp: new Date()
-			});
-
-			return updatedOrder;
-		} catch (error) {
-			this.logger.error(`Error updating order ${orderId}: ${error.message}`);
-			throw error;
-		}
-	}
-
-	/**
-	 * Get orders by client ID
-	 * @param {string} clientId - Client ID
-	 * @param {Object} options - Query options
-	 * @returns {Promise<Object>} Paginated orders
-	 * @throws {Error} Database error
-	 */
-	async getClientOrders(clientId, options = {}) {
-		try {
-			// Verify client exists in both User and Client schemas
-			await this.validateClientExists(clientId);
-
-			return this.getOrders({clientId}, options);
-		} catch (error) {
-			this.logger.error(`Error fetching orders for client ${clientId}: ${error.message}`);
-			throw error;
-		}
-	}
 }
+
 module.exports = OrderService;

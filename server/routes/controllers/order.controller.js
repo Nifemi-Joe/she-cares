@@ -162,6 +162,47 @@ class OrderController {
 	}
 
 	/**
+	 * Delete order (only pending orders)
+	 * @param {Object} req - Express request object
+	 * @param {Object} res - Express response object
+	 * @param {Function} next - Express next middleware function
+	 */
+	async deleteOrder(req, res, next) {
+		try {
+			const { id } = req.params;
+			await orderService.deleteOrder(id);
+			res.status(200).json({
+				responseCode: "00",
+				responseMessage: "Order deleted successfully",
+				responseData: { deleted: true }
+			});
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
+	 * Cancel order
+	 * @param {Object} req - Express request object
+	 * @param {Object} res - Express response object
+	 * @param {Function} next - Express next middleware function
+	 */
+	async cancelOrder(req, res, next) {
+		try {
+			const { id } = req.params;
+			const { reason } = req.body;
+			const order = await orderService.cancelOrder(id, reason);
+			res.status(200).json({
+				responseCode: "00",
+				responseMessage: "Order cancelled successfully",
+				responseData: order
+			});
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
 	 * Get order statistics (basic)
 	 * @param {Object} req - Express request object
 	 * @param {Object} res - Express response object
@@ -169,14 +210,12 @@ class OrderController {
 	 */
 	async getOrderStats(req, res, next) {
 		try {
-			// Basic stats - you'll need to implement this in OrderService
-			const stats = {
-				totalOrders: 0,
-				pendingOrders: 0,
-				completedOrders: 0,
-				totalRevenue: 0
+			const filters = {
+				fromDate: req.query.fromDate,
+				toDate: req.query.toDate
 			};
 
+			const stats = await orderService.getOrderStats(filters);
 			res.status(200).json({
 				responseCode: "00",
 				responseMessage: "Completed Successfully",
@@ -195,25 +234,39 @@ class OrderController {
 	 */
 	async getStats(req, res, next) {
 		try {
-			// Enhanced stats - you'll need to implement this in OrderService
-			const stats = {
+			const filters = {
+				fromDate: req.query.fromDate,
+				toDate: req.query.toDate
+			};
+
+			const stats = await orderService.getOrderStats(filters);
+
+			// Calculate additional metrics
+			const currentMonth = new Date();
+			currentMonth.setDate(1);
+			const monthlyStats = await orderService.getOrderStats({
+				fromDate: currentMonth
+			});
+
+			const enhancedStats = {
 				overview: {
-					totalOrders: 0,
-					totalRevenue: 0,
-					averageOrderValue: 0,
-					pendingOrders: 0
+					totalOrders: stats.overall.totalOrders,
+					totalRevenue: stats.overall.totalRevenue,
+					averageOrderValue: stats.overall.averageOrderValue,
+					pendingOrders: stats.byStatus.pending?.count || 0
 				},
 				trends: {
-					ordersThisMonth: 0,
-					revenueThisMonth: 0,
-					growthRate: 0
-				}
+					ordersThisMonth: monthlyStats.overall.totalOrders,
+					revenueThisMonth: monthlyStats.overall.totalRevenue,
+					growthRate: 0 // You can calculate this based on previous period
+				},
+				statusBreakdown: stats.byStatus
 			};
 
 			res.status(200).json({
 				responseCode: "00",
 				responseMessage: "Completed Successfully",
-				responseData: stats
+				responseData: enhancedStats
 			});
 		} catch (error) {
 			next(error);
@@ -229,15 +282,12 @@ class OrderController {
 	async getRecentOrders(req, res, next) {
 		try {
 			const limit = parseInt(req.query.limit, 10) || 10;
-			const orders = await orderService.getOrders({}, {
-				limit,
-				sort: { createdAt: -1 }
-			});
+			const orders = await orderService.getRecentOrders(limit);
 
 			res.status(200).json({
 				responseCode: "00",
 				responseMessage: "Completed Successfully",
-				responseData: orders.data
+				responseData: orders
 			});
 		} catch (error) {
 			next(error);
@@ -253,14 +303,7 @@ class OrderController {
 	async getSalesData(req, res, next) {
 		try {
 			const { period = '30d' } = req.query;
-
-			// Mock sales data - implement actual logic in OrderService
-			const salesData = {
-				period,
-				data: [],
-				totalSales: 0,
-				totalOrders: 0
-			};
+			const salesData = await orderService.getSalesData(period);
 
 			res.status(200).json({
 				responseCode: "00",
@@ -526,14 +569,10 @@ class OrderController {
 		try {
 			const { id } = req.params;
 			const order = await orderService.getOrderById(id);
+			const clientInfo = await orderService.getClientInfo(order.clientId);
 
-			// Mock invoice generation - implement actual invoice service
-			const invoice = {
-				orderId: id,
-				invoiceNumber: `INV-${Date.now()}`,
-				generatedAt: new Date(),
-				order: order
-			};
+			// Generate invoice using the service method
+			const invoice = await orderService.createOrderInvoice(order, clientInfo);
 
 			res.status(200).json({
 				responseCode: "00",
@@ -543,6 +582,102 @@ class OrderController {
 		} catch (error) {
 			next(error);
 		}
+	}
+
+	/**
+	 * Bulk update orders
+	 * @param {Object} req - Express request object
+	 * @param {Object} res - Express response object
+	 * @param {Function} next - Express next middleware function
+	 */
+	async bulkUpdateOrders(req, res, next) {
+		try {
+			const { orderIds, updateData } = req.body;
+			const results = [];
+
+			for (const orderId of orderIds) {
+				try {
+					const order = await orderService.updateOrder(orderId, updateData);
+					results.push({ orderId, success: true, order });
+				} catch (error) {
+					results.push({ orderId, success: false, error: error.message });
+				}
+			}
+
+			res.status(200).json({
+				responseCode: "00",
+				responseMessage: "Bulk update completed",
+				responseData: results
+			});
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
+	 * Export orders to CSV
+	 * @param {Object} req - Express request object
+	 * @param {Object} res - Express response object
+	 * @param {Function} next - Express next middleware function
+	 */
+	async exportOrders(req, res, next) {
+		try {
+			const filters = {
+				status: req.query.status,
+				fromDate: req.query.fromDate,
+				toDate: req.query.toDate
+			};
+
+			const orders = await orderService.getOrders(filters, {
+				limit: 10000, // Large limit for export
+				page: 1
+			});
+
+			// Convert to CSV format
+			const csvData = this._convertOrdersToCSV(orders.data);
+
+			res.setHeader('Content-Type', 'text/csv');
+			res.setHeader('Content-Disposition', 'attachment; filename="orders_export.csv"');
+			res.status(200).send(csvData);
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
+	 * Convert orders to CSV format
+	 * @param {Array} orders - Orders data
+	 * @returns {string} CSV formatted string
+	 * @private
+	 */
+	_convertOrdersToCSV(orders) {
+		const headers = [
+			'Order ID',
+			'Order Number',
+			'Client ID',
+			'Status',
+			'Total Amount',
+			'Delivery Method',
+			'Payment Status',
+			'Created At',
+			'Updated At'
+		];
+
+		const rows = orders.map(order => [
+			order.id || order._id,
+			order.orderNumber,
+			order.clientId,
+			order.status,
+			order.totalAmount || order.total,
+			order.deliveryMethod,
+			order.paymentStatus,
+			new Date(order.createdAt).toISOString(),
+			new Date(order.updatedAt).toISOString()
+		]);
+
+		return [headers, ...rows]
+			.map(row => row.map(cell => `"${cell}"`).join(','))
+			.join('\n');
 	}
 }
 
