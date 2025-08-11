@@ -8,6 +8,178 @@
  */
 
 /**
+ * Format date to localized string
+ * @param {Date|string} date - Date to format
+ * @param {string} locale - Locale (default: 'en-NG')
+ * @param {Object} options - Formatting options
+ * @returns {string} Formatted date string
+ */
+const formatDate = (date, locale = 'en-NG', options = {}) => {
+	if (!date) return '';
+
+	const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+	if (isNaN(dateObj.getTime())) return '';
+
+	const defaultOptions = {
+		year: 'numeric',
+		month: 'long',
+		day: 'numeric'
+	};
+
+	const formatOptions = { ...defaultOptions, ...options };
+
+	return new Intl.DateTimeFormat(locale, formatOptions).format(dateObj);
+};
+
+/**
+ * Format date to short format (DD/MM/YYYY)
+ * @param {Date|string} date - Date to format
+ * @param {string} separator - Date separator (default: '/')
+ * @returns {string} Formatted date string
+ */
+const formatDateShort = (date, separator = '/') => {
+	if (!date) return '';
+
+	const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+	if (isNaN(dateObj.getTime())) return '';
+
+	const day = dateObj.getDate().toString().padStart(2, '0');
+	const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+	const year = dateObj.getFullYear();
+
+	return `${day}${separator}${month}${separator}${year}`;
+};
+
+/**
+ * Format date to ISO format (YYYY-MM-DD)
+ * @param {Date|string} date - Date to format
+ * @returns {string} Formatted date string
+ */
+const formatDateISO = (date) => {
+	if (!date) return '';
+
+	const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+	if (isNaN(dateObj.getTime())) return '';
+
+	return dateObj.toISOString().split('T')[0];
+};
+
+/**
+ * Format date and time
+ * @param {Date|string} date - Date to format
+ * @param {string} locale - Locale (default: 'en-NG')
+ * @param {Object} options - Formatting options
+ * @returns {string} Formatted date and time string
+ */
+const formatDateTime = (date, locale = 'en-NG', options = {}) => {
+	if (!date) return '';
+
+	const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+	if (isNaN(dateObj.getTime())) return '';
+
+	const defaultOptions = {
+		year: 'numeric',
+		month: 'long',
+		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit'
+	};
+
+	const formatOptions = { ...defaultOptions, ...options };
+
+	return new Intl.DateTimeFormat(locale, formatOptions).format(dateObj);
+};
+
+/**
+ * Format time only
+ * @param {Date|string} date - Date to format
+ * @param {string} locale - Locale (default: 'en-NG')
+ * @param {boolean} includeSeconds - Include seconds (default: false)
+ * @returns {string} Formatted time string
+ */
+const formatTime = (date, locale = 'en-NG', includeSeconds = false) => {
+	if (!date) return '';
+
+	const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+	if (isNaN(dateObj.getTime())) return '';
+
+	const options = {
+		hour: '2-digit',
+		minute: '2-digit'
+	};
+
+	if (includeSeconds) {
+		options.second = '2-digit';
+	}
+
+	return new Intl.DateTimeFormat(locale, options).format(dateObj);
+};
+
+/**
+ * Get relative time (e.g., "2 days ago", "in 3 hours")
+ * @param {Date|string} date - Date to compare
+ * @param {string} locale - Locale (default: 'en-NG')
+ * @returns {string} Relative time string
+ */
+const formatRelativeTime = (date, locale = 'en-NG') => {
+	if (!date) return '';
+
+	const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+	if (isNaN(dateObj.getTime())) return '';
+
+	const now = new Date();
+	const diffInSeconds = Math.floor((now.getTime() - dateObj.getTime()) / 1000);
+
+	// Use Intl.RelativeTimeFormat if available
+	if (typeof Intl !== 'undefined' && Intl.RelativeTimeFormat) {
+		const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+
+		if (Math.abs(diffInSeconds) < 60) {
+			return rtf.format(-diffInSeconds, 'second');
+		} else if (Math.abs(diffInSeconds) < 3600) {
+			return rtf.format(-Math.floor(diffInSeconds / 60), 'minute');
+		} else if (Math.abs(diffInSeconds) < 86400) {
+			return rtf.format(-Math.floor(diffInSeconds / 3600), 'hour');
+		} else if (Math.abs(diffInSeconds) < 2592000) {
+			return rtf.format(-Math.floor(diffInSeconds / 86400), 'day');
+		} else if (Math.abs(diffInSeconds) < 31536000) {
+			return rtf.format(-Math.floor(diffInSeconds / 2592000), 'month');
+		} else {
+			return rtf.format(-Math.floor(diffInSeconds / 31536000), 'year');
+		}
+	}
+
+	// Fallback for older environments
+	const absDiff = Math.abs(diffInSeconds);
+	const isPast = diffInSeconds > 0;
+
+	if (absDiff < 60) {
+		return isPast ? 'just now' : 'in a moment';
+	} else if (absDiff < 3600) {
+		const minutes = Math.floor(absDiff / 60);
+		return isPast ? `${minutes} minute${minutes > 1 ? 's' : ''} ago` : `in ${minutes} minute${minutes > 1 ? 's' : ''}`;
+	} else if (absDiff < 86400) {
+		const hours = Math.floor(absDiff / 3600);
+		return isPast ? `${hours} hour${hours > 1 ? 's' : ''} ago` : `in ${hours} hour${hours > 1 ? 's' : ''}`;
+	} else if (absDiff < 2592000) {
+		const days = Math.floor(absDiff / 86400);
+		return isPast ? `${days} day${days > 1 ? 's' : ''} ago` : `in ${days} day${days > 1 ? 's' : ''}`;
+	} else if (absDiff < 31536000) {
+		const months = Math.floor(absDiff / 2592000);
+		return isPast ? `${months} month${months > 1 ? 's' : ''} ago` : `in ${months} month${months > 1 ? 's' : ''}`;
+	} else {
+		const years = Math.floor(absDiff / 31536000);
+		return isPast ? `${years} year${years > 1 ? 's' : ''} ago` : `in ${years} year${years > 1 ? 's' : ''}`;
+	}
+};
+
+/**
  * Capitalize first letter of each word
  * @param {string} str - Input string
  * @returns {string} Formatted string
@@ -187,6 +359,12 @@ const maskString = (str, visibleChars = 2, maskChar = '*') => {
 };
 
 module.exports = {
+	formatDate,
+	formatDateShort,
+	formatDateISO,
+	formatDateTime,
+	formatTime,
+	formatRelativeTime,
 	capitalizeWords,
 	capitalizeFirst,
 	toCamelCase,

@@ -184,8 +184,8 @@ class AuthService {
 				email: user.email,
 				role: user.role
 			},
-			config.jwtSecret,
-			{ expiresIn: config.jwtExpiresIn }
+			config.jwt.secret, // Changed from config.jwt to config.jwt.secret
+			{ expiresIn: config.jwt.expiresIn } // Also use config.jwt.expiresIn instead of config.jwtExpiresIn
 		);
 	}
 

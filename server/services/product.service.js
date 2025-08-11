@@ -106,9 +106,8 @@ class ProductService {
 				limit: options.limit || 10,
 				populate: {
 					path: 'categoryId',
-					select: 'name slug' // Only select needed fields
+					select: 'name slug id' // Only select needed fields
 				},
-				select: this._getSelectFields(), // Only select needed fields
 				lean: true // Return plain JavaScript objects instead of Mongoose documents
 			};
 

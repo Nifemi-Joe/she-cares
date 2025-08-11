@@ -1,5 +1,3 @@
-// src/config/email.config.js
-
 /**
  * Email configuration
  * @module config/email
@@ -8,57 +6,68 @@
  * @author SheCares Development Team
  */
 
-const env = process.env.NODE_ENV || 'development';
+const env = process.env.NODE_ENV;
 
 /**
  * Email provider configuration
  */
 const emailConfig = {
 	development: {
-		service: process.env.EMAIL_SERVICE || 'smtp',
-		host: process.env.EMAIL_HOST || 'smtp.mailtrap.io',
-		port: parseInt(process.env.EMAIL_PORT || '2525', 10),
-		secure: process.env.EMAIL_SECURE === 'true' || false,
-		auth: {
-			user: process.env.EMAIL_USER || '',
-			pass: process.env.EMAIL_PASS || ''
-		},
-		from: {
-			name: process.env.EMAIL_FROM_NAME || 'SheCares Market (Dev)',
-			email: process.env.EMAIL_FROM_EMAIL || 'dev@shecaresmarket.com'
-		},
-		// In development, log emails to console instead of sending
-		logOnly: process.env.EMAIL_LOG_ONLY === 'true' || true
-	},
-	test: {
-		service: process.env.EMAIL_SERVICE || 'smtp',
-		host: process.env.EMAIL_HOST || 'smtp.mailtrap.io',
-		port: parseInt(process.env.EMAIL_PORT || '2525', 10),
-		secure: process.env.EMAIL_SECURE === 'true' || false,
-		auth: {
-			user: process.env.EMAIL_USER || '',
-			pass: process.env.EMAIL_PASS || ''
-		},
-		from: {
-			name: process.env.EMAIL_FROM_NAME || 'SheCares Market (Test)',
-			email: process.env.EMAIL_FROM_EMAIL || 'test@shecaresmarket.com'
-		},
-		// In test environment, don't send actual emails
-		logOnly: true
-	},
-	production: {
-		service: process.env.EMAIL_SERVICE || 'smtp',
 		host: process.env.EMAIL_HOST,
-		port: parseInt(process.env.EMAIL_PORT || '587', 10),
-		secure: process.env.EMAIL_SECURE === 'true' || false,
+		port: parseInt(process.env.EMAIL_PORT, 10),
+		secure: false,
+		requireTLS: true,
 		auth: {
 			user: process.env.EMAIL_USER,
 			pass: process.env.EMAIL_PASS
 		},
 		from: {
-			name: process.env.EMAIL_FROM_NAME || 'SheCares Market',
-			email: process.env.EMAIL_FROM_EMAIL || 'no-reply@shecaresmarket.com'
+			name: process.env.EMAIL_FROM_NAME,
+			email: process.env.EMAIL_FROM_EMAIL
 		},
+		connectionTimeout: 60000,
+		greetingTimeout: 30000,
+		socketTimeout: 60000,
+		pool: true,
+		maxConnections: 5,
+		maxMessages: 100,
+		rateLimit: 14,
+		logOnly: process.env.EMAIL_LOG_ONLY === 'true'
+	},
+	test: {
+		host: process.env.EMAIL_HOST,
+		port: parseInt(process.env.EMAIL_PORT, 10),
+		secure: false,
+		auth: {
+			user: process.env.EMAIL_USER,
+			pass: process.env.EMAIL_PASS
+		},
+		from: {
+			name: process.env.EMAIL_FROM_NAME,
+			email: process.env.EMAIL_FROM_EMAIL
+		},
+		logOnly: true
+	},
+	production: {
+		host: process.env.EMAIL_HOST,
+		port: parseInt(process.env.EMAIL_PORT, 10),
+		secure: process.env.EMAIL_SECURE === 'true',
+		requireTLS: true,
+		auth: {
+			user: process.env.EMAIL_USER,
+			pass: process.env.EMAIL_PASS
+		},
+		from: {
+			name: process.env.EMAIL_FROM_NAME,
+			email: process.env.EMAIL_FROM_EMAIL
+		},
+		connectionTimeout: 60000,
+		greetingTimeout: 30000,
+		socketTimeout: 60000,
+		pool: true,
+		maxConnections: 5,
+		maxMessages: 100,
+		rateLimit: 14,
 		logOnly: false
 	}
 };
@@ -97,17 +106,15 @@ const templates = {
  * Email delivery settings
  */
 const delivery = {
-	// Retry sending failed emails
 	retry: {
 		enabled: true,
 		maxAttempts: 3,
-		delay: 15 * 60 * 1000 // 15 minutes
+		delay: 15 * 60 * 1000
 	},
-	// Queue emails for better performance
 	queue: {
 		enabled: true,
 		concurrentJobs: 5,
-		jobTimeout: 30000 // 30 seconds
+		jobTimeout: 30000
 	}
 };
 

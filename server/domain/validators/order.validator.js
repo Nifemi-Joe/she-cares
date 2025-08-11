@@ -191,8 +191,8 @@ class OrderValidator {
 	 */
 	validateStatusUpdate(status) {
 		const errors = {};
-
-		if (!status || !['pending', 'processing', 'shipped', 'delivered', 'cancelled'].includes(status)) {
+		const statusType = status.status
+		if (!statusType || !['pending', 'processing', 'shipped', 'delivered', 'cancelled'].includes(statusType)) {
 			errors.status = 'Invalid order status';
 		}
 

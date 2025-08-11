@@ -1,5 +1,3 @@
-// src/config/app.config.js
-
 /**
  * Application configuration
  * @module config/app
@@ -8,7 +6,7 @@
  * @author SheCares Development Team
  */
 
-const env = process.env.NODE_ENV || 'development';
+const env = process.env.NODE_ENV;
 
 /**
  * Application configuration by environment
@@ -18,9 +16,9 @@ const appConfig = {
 		env: 'development',
 		name: 'SheCares Market API',
 		version: '1.0.0',
-		port: parseInt(process.env.PORT || '7009', 10),
-		baseUrl: process.env.BASE_URL || 'http://localhost:7009',
-		clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
+		port: parseInt(process.env.PORT, 10),
+		baseUrl: process.env.BASE_URL,
+		clientUrl: process.env.CLIENT_URL,
 		cors: {
 			origin: '*',
 			credentials: true
@@ -29,19 +27,33 @@ const appConfig = {
 		enableApiDocs: true,
 		docsUrl: '/api-docs',
 		logLevel: 'debug',
-		uploadDir: process.env.UPLOAD_DIR || './uploads',
+		uploadDir: process.env.UPLOAD_DIR,
 		defaultAdminUser: {
-			email: process.env.DEFAULT_ADMIN_EMAIL || 'admin@shecaresmarket.com',
-			password: process.env.DEFAULT_ADMIN_PASSWORD || 'adminPassword123!'
+			email: process.env.DEFAULT_ADMIN_EMAIL,
+			password: process.env.DEFAULT_ADMIN_PASSWORD
+		},
+		businessName: 'She Cares',
+		businessAddress: {
+			street: "H91, Ikota Shopping Complex, VGC",
+			city: "Lagos",
+			country: "Nigeria"
+		},
+		businessPhone: "+2348023132369",
+		businessEmail: "globalsjxinfo@gmail.com",
+		paymentInfo: {
+			bankName: 'First Bank',
+			accountName: 'SheCares Foods',
+			accountNumber: '0123456789',
+			bankCode: '000000'
 		}
 	},
 	test: {
 		env: 'test',
 		name: 'SheCares Market API (Test)',
 		version: '1.0.0',
-		port: parseInt(process.env.PORT || '5001', 10),
-		baseUrl: process.env.BASE_URL || 'http://localhost:5001',
-		clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
+		port: parseInt(process.env.PORT, 10),
+		baseUrl: process.env.BASE_URL,
+		clientUrl: process.env.CLIENT_URL,
 		cors: {
 			origin: '*',
 			credentials: true
@@ -49,8 +61,8 @@ const appConfig = {
 		serveStaticFiles: true,
 		enableApiDocs: true,
 		docsUrl: '/api-docs',
-		logLevel: 'error', // Less verbose in tests
-		uploadDir: process.env.UPLOAD_DIR || './test/uploads',
+		logLevel: 'error',
+		uploadDir: process.env.UPLOAD_DIR,
 		defaultAdminUser: {
 			email: 'test@shecaresmarket.com',
 			password: 'testPassword123!'
@@ -60,7 +72,7 @@ const appConfig = {
 		env: 'production',
 		name: 'SheCares Market API',
 		version: '1.0.0',
-		port: parseInt(process.env.PORT || '8080', 10),
+		port: parseInt(process.env.PORT, 10),
 		baseUrl: process.env.BASE_URL,
 		clientUrl: process.env.CLIENT_URL,
 		cors: {
@@ -68,10 +80,10 @@ const appConfig = {
 			credentials: true
 		},
 		serveStaticFiles: true,
-		enableApiDocs: process.env.ENABLE_API_DOCS === 'true' || false,
+		enableApiDocs: process.env.ENABLE_API_DOCS === 'true',
 		docsUrl: '/api-docs',
 		logLevel: 'info',
-		uploadDir: process.env.UPLOAD_DIR || './uploads',
+		uploadDir: process.env.UPLOAD_DIR,
 		defaultAdminUser: {
 			email: process.env.DEFAULT_ADMIN_EMAIL,
 			password: process.env.DEFAULT_ADMIN_PASSWORD

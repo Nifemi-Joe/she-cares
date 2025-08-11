@@ -239,6 +239,170 @@ class InvoiceService {
 		}
 	}
 
+	/**
+	 * Download invoice as PDF
+	 * @param {string} invoiceId - The invoice ID
+	 * @param {Object} options - Download options
+	 * @returns {Object} - PDF buffer and filename for download
+	 */
+	async downloadInvoice(invoiceId, options = {}) {
+		try {
+			// Get invoice data
+			const invoice = await this.getInvoiceById(invoiceId);
+
+			// Generate PDF buffer
+			const pdfBuffer = await PDFService.generateInvoice(invoice);
+
+			// Generate filename
+			const filename = options.filename || `Invoice-${invoice.invoiceNumber}.pdf`;
+
+			// Update download tracking (optional)
+			await this.updateDownloadTracking(invoiceId);
+
+			return {
+				buffer: pdfBuffer,
+				filename: filename,
+				contentType: 'application/pdf',
+				size: pdfBuffer.length,
+				invoiceNumber: invoice.invoiceNumber,
+				clientName: invoice.clientInfo.name,
+				totalAmount: invoice.totalAmount
+			};
+		} catch (error) {
+			throw new Error(`Failed to download invoice: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Download multiple invoices as a ZIP file
+	 * @param {Array} invoiceIds - Array of invoice IDs
+	 * @param {Object} options - Download options
+	 * @returns {Object} - ZIP buffer and filename for download
+	 */
+	async downloadMultipleInvoices(invoiceIds, options = {}) {
+		try {
+			const JSZip = require('jszip');
+			const zip = new JSZip();
+
+			// Validate input
+			if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+				throw new Error('Invoice IDs array is required');
+			}
+
+			// Generate PDFs for each invoice
+			const invoicePromises = invoiceIds.map(async (invoiceId) => {
+				try {
+					const invoice = await this.getInvoiceById(invoiceId);
+					const pdfBuffer = await PDFService.generateInvoice(invoice);
+					return {
+						filename: `Invoice-${invoice.invoiceNumber}.pdf`,
+						buffer: pdfBuffer,
+						invoiceNumber: invoice.invoiceNumber
+					};
+				} catch (error) {
+					console.error(`Failed to generate PDF for invoice ${invoiceId}:`, error);
+					return null;
+				}
+			});
+
+			const invoiceResults = await Promise.all(invoicePromises);
+			const validInvoices = invoiceResults.filter(result => result !== null);
+
+			if (validInvoices.length === 0) {
+				throw new Error('No valid invoices found to download');
+			}
+
+			// Add each PDF to the ZIP
+			validInvoices.forEach(({ filename, buffer }) => {
+				zip.file(filename, buffer);
+			});
+
+			// Generate ZIP buffer
+			const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+			// Generate ZIP filename
+			const timestamp = new Date().toISOString().split('T')[0];
+			const zipFilename = options.filename || `Invoices-${timestamp}.zip`;
+
+			return {
+				buffer: zipBuffer,
+				filename: zipFilename,
+				contentType: 'application/zip',
+				size: zipBuffer.length,
+				invoiceCount: validInvoices.length,
+				invoiceNumbers: validInvoices.map(inv => inv.invoiceNumber)
+			};
+		} catch (error) {
+			throw new Error(`Failed to download multiple invoices: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Get download history for an invoice
+	 * @param {string} invoiceId - The invoice ID
+	 * @returns {Object} - Download history
+	 */
+	async getDownloadHistory(invoiceId) {
+		try {
+			const invoice = await Invoice.findById(invoiceId).select('downloadHistory lastDownloadedAt downloadCount');
+
+			if (!invoice) {
+				throw new Error('Invoice not found');
+			}
+
+			return {
+				downloadCount: invoice.downloadCount || 0,
+				lastDownloadedAt: invoice.lastDownloadedAt || null,
+				downloadHistory: invoice.downloadHistory || []
+			};
+		} catch (error) {
+			throw new Error(`Failed to get download history: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Update download tracking for an invoice
+	 * @param {string} invoiceId - The invoice ID
+	 * @param {Object} downloadInfo - Additional download information
+	 */
+	async updateDownloadTracking(invoiceId, downloadInfo = {}) {
+		try {
+			const invoice = await Invoice.findById(invoiceId);
+
+			if (!invoice) {
+				throw new Error('Invoice not found');
+			}
+
+			// Initialize download tracking fields if they don't exist
+			if (!invoice.downloadCount) invoice.downloadCount = 0;
+			if (!invoice.downloadHistory) invoice.downloadHistory = [];
+
+			// Update download count and timestamp
+			invoice.downloadCount += 1;
+			invoice.lastDownloadedAt = new Date();
+
+			// Add to download history (keep last 10 downloads)
+			const downloadRecord = {
+				downloadedAt: new Date(),
+				userAgent: downloadInfo.userAgent || 'Unknown',
+				ipAddress: downloadInfo.ipAddress || 'Unknown',
+				downloadType: downloadInfo.downloadType || 'single'
+			};
+
+			invoice.downloadHistory.push(downloadRecord);
+
+			// Keep only last 10 download records
+			if (invoice.downloadHistory.length > 10) {
+				invoice.downloadHistory = invoice.downloadHistory.slice(-10);
+			}
+
+			await invoice.save();
+		} catch (error) {
+			console.error('Failed to update download tracking:', error);
+			// Don't throw error as this is not critical
+		}
+	}
+
 	async sendInvoiceByEmail(invoiceId, options = {}) {
 		try {
 			const invoice = await this.getInvoiceById(invoiceId);

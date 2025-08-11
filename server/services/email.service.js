@@ -13,11 +13,32 @@ const logger = require('../infrastructure/logging/logger');
  */
 class EmailService {
 	constructor() {
-		this.transporter = this._createTransporter();
+		this.transporter = null;
+		this.retryCount = 0;
+		this.maxRetries = 3;
+		this._initializeTransporter();
 	}
 
 	/**
-	 * Send an email
+	 * Initialize email transporter with retry logic
+	 * @private
+	 */
+	async _initializeTransporter() {
+		try {
+			this.transporter = await this._createTransporter();
+			// Verify connection
+			await this._verifyConnection();
+		} catch (error) {
+			logger.error(`Failed to initialize email transporter: ${error.message}`);
+			if (this.retryCount < this.maxRetries) {
+				this.retryCount++;
+				setTimeout(() => this._initializeTransporter(), 5000); // Retry after 5 seconds
+			}
+		}
+	}
+
+	/**
+	 * Send an email with retry logic
 	 * @param {Object} emailData - Email data
 	 * @param {string|string[]} emailData.to - Recipient(s)
 	 * @param {string} [emailData.from] - Sender (defaults to config)
@@ -27,7 +48,7 @@ class EmailService {
 	 * @param {Array} [emailData.attachments] - Email attachments
 	 * @returns {Promise<Object>} Send result
 	 */
-	async sendEmail(emailData) {
+	async sendEmail(emailData, retryAttempt = 0) {
 		try {
 			const { to, from = emailConfig.config.from.email, subject, text, html, attachments } = emailData;
 
@@ -35,9 +56,23 @@ class EmailService {
 				throw new AppError('Missing required email fields', 400);
 			}
 
+			// Check if in log-only mode
+			if (emailConfig.config.logOnly) {
+				logger.info(`[EMAIL LOG ONLY] Would send email to: ${to}, subject: ${subject}`);
+				return { messageId: 'log-only-mode', accepted: [to] };
+			}
+
+			// Ensure transporter is available
+			if (!this.transporter) {
+				await this._initializeTransporter();
+				if (!this.transporter) {
+					throw new Error('Email transporter not initialized');
+				}
+			}
+
 			const mailOptions = {
 				from,
-				to,
+				to: Array.isArray(to) ? to.join(', ') : to,
 				subject,
 				text,
 				html,
@@ -45,11 +80,27 @@ class EmailService {
 			};
 
 			const info = await this.transporter.sendMail(mailOptions);
-			logger.info(`Email sent: ${info.messageId}`);
+			logger.info(`Email sent successfully: ${info.messageId} to ${to}`);
 			return info;
+
 		} catch (error) {
-			logger.error(`Error sending email: ${error.message}`);
-			throw new AppError(`Failed to send email: ${error.message}`, 500);
+			logger.error(`Error sending email (attempt ${retryAttempt + 1}): ${error.message}`);
+
+			// Check if it's a socket error and we should retry
+			if (this._shouldRetryError(error) && retryAttempt < this.maxRetries) {
+				logger.info(`Retrying email send in 5 seconds... (attempt ${retryAttempt + 2})`);
+
+				// Recreate transporter on socket errors
+				if (error.message.includes('socket') || error.message.includes('connection')) {
+					this.transporter = null;
+					await this._initializeTransporter();
+				}
+
+				await this._delay(5000); // Wait 5 seconds before retry
+				return this.sendEmail(emailData, retryAttempt + 1);
+			}
+
+			throw new AppError(`Failed to send email after ${retryAttempt + 1} attempts: ${error.message}`, 500);
 		}
 	}
 
@@ -148,18 +199,18 @@ class EmailService {
 	async sendPasswordReset(user, resetToken, resetUrl) {
 		const subject = `Password Reset - ${emailConfig.config.from.name}`;
 		const text = `
-    Hello ${user.fullName},
+Hello ${user.fullName},
 
-  You requested a password reset. Please use the following link to reset your password:
-  ${resetUrl}?token=${resetToken}
+You requested a password reset. Please use the following link to reset your password:
+${resetUrl}?token=${resetToken}
 
-  This link will expire in 1 hour.
+This link will expire in 1 hour.
 
-  If you did not request this, please ignore this email and your password will remain unchanged.
+If you did not request this, please ignore this email and your password will remain unchanged.
 
-  Regards,
-  ${emailConfig.config.from.name} Team
-  `;
+Regards,
+${emailConfig.config.from.name} Team
+`;
 
 		return this.sendEmail({
 			to: user.email,
@@ -169,32 +220,84 @@ class EmailService {
 	}
 
 	/**
+	 * Verify email connection
+	 * @returns {Promise<boolean>} Connection status
+	 * @private
+	 */
+	async _verifyConnection() {
+		if (!this.transporter) return false;
+
+		try {
+			await this.transporter.verify();
+			logger.info('Email transporter connection verified successfully');
+			return true;
+		} catch (error) {
+			logger.error(`Email transporter verification failed: ${error.message}`);
+			return false;
+		}
+	}
+
+	/**
 	 * Create email transporter
 	 * @returns {Object} Nodemailer transporter
 	 * @private
 	 */
 	_createTransporter() {
-		// For development, use a test account or ethereal
-		if (emailConfig.config.logOnly) {
-			// Create a mock transporter that just logs emails
-			return {
-				sendMail: (mailOptions) => {
-					logger.info('Mock email sent:', JSON.stringify(mailOptions, null, 2));
-					return Promise.resolve({ messageId: `mock-${Date.now()}` });
-				}
-			};
-		}
+		const config = emailConfig.config;
 
-		// For production
-		return nodemailer.createTransport({
-			host: emailConfig.config.host,
-			port: emailConfig.config.port,
-			secure: emailConfig.config.secure,
+		// Create transporter with enhanced configuration
+		const transporterConfig = {
+			host: config.host,
+			port: config.port,
+			secure: config.secure,
+			requireTLS: config.requireTLS || false,
 			auth: {
-				user: emailConfig.config.auth.user,
-				pass: emailConfig.config.auth.pass
-			}
-		});
+				user: config.auth.user,
+				pass: config.auth.pass
+			},
+			// Enhanced connection settings
+			connectionTimeout: config.connectionTimeout || 60000,
+			greetingTimeout: config.greetingTimeout || 30000,
+			socketTimeout: config.socketTimeout || 60000,
+			pool: config.pool || true,
+			maxConnections: config.maxConnections || 5,
+			maxMessages: config.maxMessages || 100,
+			rateLimit: config.rateLimit || 14
+		};
+
+		logger.info(`Creating email transporter with host: ${config.host}:${config.port}`);
+		return nodemailer.createTransport(transporterConfig);
+	}
+
+	/**
+	 * Check if error should trigger a retry
+	 * @param {Error} error - The error to check
+	 * @returns {boolean} Whether to retry
+	 * @private
+	 */
+	_shouldRetryError(error) {
+		const retryableErrors = [
+			'socket',
+			'timeout',
+			'ECONNRESET',
+			'ENOTFOUND',
+			'ECONNREFUSED',
+			'Unexpected socket close'
+		];
+
+		return retryableErrors.some(errorType =>
+			error.message.toLowerCase().includes(errorType.toLowerCase())
+		);
+	}
+
+	/**
+	 * Delay execution
+	 * @param {number} ms - Milliseconds to delay
+	 * @returns {Promise} Promise that resolves after delay
+	 * @private
+	 */
+	_delay(ms) {
+		return new Promise(resolve => setTimeout(resolve, ms));
 	}
 
 	/**
@@ -209,51 +312,51 @@ class EmailService {
 		const items = order.items.map(item => `${item.quantity} x ${item.product.name} - ₦${item.price * item.quantity}`).join('\n    ');
 
 		return `
-    Hello ${client.name},
+Hello ${client.name},
 
-  Thank you for your order with ${emailConfig.config.from.name}!
+Thank you for your order with ${emailConfig.config.from.name}!
 
-  ## Order Details:
+## Order Details:
 
-  Order Number: ${order.orderNumber}
-  Date: ${date}
-  Delivery Method: ${order.deliveryMethod}
+Order Number: ${order.orderNumber}
+Date: ${date}
+Delivery Method: ${order.deliveryMethod}
 
-  ## Items:
+## Items:
 
-  ${items}
+${items}
 
-  Subtotal: ₦${order.subtotal}
-  ${order.deliveryFee ? `Delivery Fee: ₦${order.deliveryFee}` : ''}
-  ${order.discount ? `Discount: ₦${order.discount}` : ''}
-  Total: ₦${order.totalAmount}
+Subtotal: ₦${order.subtotal}
+${order.deliveryFee ? `Delivery Fee: ₦${order.deliveryFee}` : ''}
+${order.discount ? `Discount: ₦${order.discount}` : ''}
+Total: ₦${order.totalAmount}
 
-  ${order.deliveryMethod === 'delivery' ? `
-  Delivery Address:
-  -----------------
+${order.deliveryMethod === 'delivery' ? `
+Delivery Address:
+-----------------
 
-  ${order.deliveryAddress.street}
-  ${order.deliveryAddress.city}, ${order.deliveryAddress.state}
-  ${order.deliveryAddress.country}
-  `:`
-  Pickup Information:
-  -------------------
+${order.deliveryAddress.street}
+${order.deliveryAddress.city}, ${order.deliveryAddress.state}
+${order.deliveryAddress.country}
+`:`
+Pickup Information:
+-------------------
 
-  You can pick up your order at our location.
-  `}
+You can pick up your order at our location.
+`}
 
-  ## Payment Information:
+## Payment Information:
 
-  Please transfer the total amount to:
-  Bank: ${process.env.BANK_NAME || 'Your Bank'}
-  Account Number: ${process.env.ACCOUNT_NUMBER || 'Your Account Number'}
-  Account Name: ${process.env.ACCOUNT_NAME || 'Your Account Name'}
+Please transfer the total amount to:
+Bank: ${process.env.BANK_NAME || 'Your Bank'}
+Account Number: ${process.env.ACCOUNT_NUMBER || 'Your Account Number'}
+Account Name: ${process.env.ACCOUNT_NAME || 'Your Account Name'}
 
-  Thank you for shopping with us!
+Thank you for shopping with us!
 
-  Regards,
-  ${emailConfig.config.from.name} Team
-  `;
+Regards,
+${emailConfig.config.from.name} Team
+`;
 	}
 
 	/**
@@ -284,23 +387,23 @@ class EmailService {
 		}
 
 		return `
-    Hello,
+Hello,
 
-  Update on your order #${order.orderNumber}:
+Update on your order #${order.orderNumber}:
 
-  ${statusMessage}
+${statusMessage}
 
-  ${delivery.scheduledDate ? `   Scheduled delivery date: ${new Date(delivery.scheduledDate).toLocaleDateString()}
-     ${delivery.timeSlot ?`Time slot: ${delivery.timeSlot}`: ''}
-    ` : ''}
+${delivery.scheduledDate ? `Scheduled delivery date: ${new Date(delivery.scheduledDate).toLocaleDateString()}
+${delivery.timeSlot ? `Time slot: ${delivery.timeSlot}` : ''}
+` : ''}
 
-  ${delivery.notes ? `Additional Notes: ${delivery.notes}` : ''}
+${delivery.notes ? `Additional Notes: ${delivery.notes}` : ''}
 
-  If you have any questions, please contact us.
+If you have any questions, please contact us.
 
-  Regards,
-  ${emailConfig.config.from.name} Team
-  `;
+Regards,
+${emailConfig.config.from.name} Team
+`;
 	}
 
 	/**
@@ -318,18 +421,18 @@ class EmailService {
 		switch (template) {
 			case 'order-confirmation':
 				content = `
-       <h1>Order Confirmation</h1>
-       <p>Dear ${data.clientName},</p>
-       <p>Thank you for your order #${data.orderNumber}.</p>
-       <p>Total: ₦${data.total}</p>
-     `;
+<h1>Order Confirmation</h1>
+<p>Dear ${data.clientName},</p>
+<p>Thank you for your order #${data.orderNumber}.</p>
+<p>Total: ₦${data.total}</p>
+`;
 				break;
 			case 'password-reset':
 				content = `
-       <h1>Password Reset</h1>
-       <p>Dear ${data.userName},</p>
-       <p>Click <a href="${data.resetUrl}">here</a> to reset your password.</p>
-     `;
+<h1>Password Reset</h1>
+<p>Dear ${data.userName},</p>
+<p>Click <a href="${data.resetUrl}">here</a> to reset your password.</p>
+`;
 				break;
 			default:
 				content = '<p>No template content available.</p>';

@@ -55,7 +55,7 @@ class ClientController {
 				throw new ValidationError('Client name is required');
 			}
 
-			const client = await clientService.creaateClient(clientData);
+			const client = await clientService.createClient(clientData);
 
 			res.status(201).json({
 				responseCode: 200,
