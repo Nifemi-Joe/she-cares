@@ -19,12 +19,66 @@ class AuthController {
 	async register(req, res, next) {
 		try {
 			const userData = req.body;
-			const user = await authService.register(userData);
+			const result = await authService.register(userData);
 
 			res.status(201).json({
 				responseCode: 201,
-				responseData: user,
-				responseMessage: 'User registered successfully'
+				responseData: {
+					user: result.user,
+					requiresVerification: true
+				},
+				responseMessage: 'Registration successful. Please check your email for OTP verification.'
+			});
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
+	 * Verify OTP
+	 * @param {Object} req - Express request object
+	 * @param {Object} res - Express response object
+	 * @param {Function} next - Express next middleware function
+	 */
+	async verifyOTP(req, res, next) {
+		try {
+			const { email, otp } = req.body;
+
+			if (!email || !otp) {
+				throw new ValidationError('Email and OTP are required');
+			}
+
+			const result = await authService.verifyOTP(email, otp);
+
+			res.status(200).json({
+				responseCode: 200,
+				responseData: result,
+				responseMessage: 'OTP verified successfully. Account activated.'
+			});
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/**
+	 * Resend OTP
+	 * @param {Object} req - Express request object
+	 * @param {Object} res - Express response object
+	 * @param {Function} next - Express next middleware function
+	 */
+	async resendOTP(req, res, next) {
+		try {
+			const { email } = req.body;
+
+			if (!email) {
+				throw new ValidationError('Email is required');
+			}
+
+			await authService.resendOTP(email);
+
+			res.status(200).json({
+				responseCode: 200,
+				responseMessage: 'OTP resent successfully. Please check your email.'
 			});
 		} catch (error) {
 			next(error);
@@ -65,7 +119,6 @@ class AuthController {
 	 */
 	async getProfile(req, res, next) {
 		try {
-			console.log(req.user)
 			const userId = req.user.id;
 			const user = await authService.getProfile(userId);
 

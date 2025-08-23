@@ -39,9 +39,9 @@ class UserValidator {
 					'any.required': 'Password confirmation is required'
 				}),
 
-			role: Joi.string().valid('admin', 'staff').default('staff')
+			role: Joi.string().valid('admin', 'client').default('client')
 				.messages({
-					'any.only': 'Role must be either "admin" or "staff"'
+					'any.only': 'Role must be either "admin" or "client"'
 				}),
 
 			phoneNumber: Joi.string().allow('').optional(),
@@ -50,6 +50,36 @@ class UserValidator {
 				notifications: Joi.boolean().default(true),
 				theme: Joi.string().valid('light', 'dark').default('light')
 			}).optional()
+		});
+
+		this._verifyOTPSchema = Joi.object({
+			email: Joi.string()
+				.email()
+				.required()
+				.messages({
+					'string.empty': 'Email is required',
+					'string.email': 'Please provide a valid email address'
+				}),
+
+			otp: Joi.string()
+				.length(6)
+				.pattern(/^[0-9]+$/)
+				.required()
+				.messages({
+					'string.empty': 'OTP is required',
+					'string.length': 'OTP must be exactly 6 digits',
+					'string.pattern.base': 'OTP must contain only numbers'
+				})
+		});
+
+		this._resendOTPSchema = Joi.object({
+			email: Joi.string()
+				.email()
+				.required()
+				.messages({
+					'string.empty': 'Email is required',
+					'string.email': 'Please provide a valid email address'
+				})
 		});
 
 		this._loginSchema = Joi.object({
@@ -130,9 +160,9 @@ class UserValidator {
 					'any.required': 'Password is required'
 				}),
 
-			role: Joi.string().valid('admin', 'staff').required()
+			role: Joi.string().valid('admin', 'client').required()
 				.messages({
-					'any.only': 'Role must be either "admin" or "staff"',
+					'any.only': 'Role must be either "admin" or "client"',
 					'any.required': 'Role is required'
 				}),
 
@@ -153,9 +183,9 @@ class UserValidator {
 					'string.max': 'Full name cannot exceed 100 characters'
 				}),
 
-			role: Joi.string().valid('admin', 'staff').optional()
+			role: Joi.string().valid('admin', 'client').optional()
 				.messages({
-					'any.only': 'Role must be either "admin" or "staff"'
+					'any.only': 'Role must be either "admin" or "client"'
 				}),
 
 			phoneNumber: Joi.string().allow('').optional(),
@@ -205,6 +235,14 @@ class UserValidator {
 	 */
 	registerSchema = (data) => {
 		return this._registerSchema.validate(data, { abortEarly: false });
+	}
+
+	verifyOTPSchema = (data) => {
+		return this._verifyOTPSchema.validate(data, { abortEarly: false });
+	}
+
+	resendOTPSchema = (data) => {
+		return this._resendOTPSchema.validate(data, { abortEarly: false });
 	}
 
 	/**

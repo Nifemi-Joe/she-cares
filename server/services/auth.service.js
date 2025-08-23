@@ -2,9 +2,11 @@
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const userRepository = require('../data/repositories/user.repository');
 const config = require('../config/security.config');
-const { AuthenticationError, NotFoundError } = require('../utils/error-handler');
+const emailService = require('./email.service');
+const { AuthenticationError, NotFoundError, ValidationError } = require('../utils/error-handler');
 
 /**
  * @class AuthService
@@ -29,15 +31,110 @@ class AuthService {
 		const salt = await bcrypt.genSalt(10);
 		const hashedPassword = await bcrypt.hash(userData.password, salt);
 
-		// Create user
+		// Generate OTP
+		const otp = this._generateOTP();
+		const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+
+		// Create user with OTP (not verified yet)
 		const user = await userRepository.create({
 			...userData,
 			password: hashedPassword,
-			role: userData.role || 'staff',
-			isActive: true
+			role: userData.role || 'client',
+			isActive: false, // Will be activated after OTP verification
+			isVerified: false,
+			otp: otp,
+			otpExpiry: otpExpiry
 		});
 
-		return this._sanitizeUser(user);
+		// Send OTP email
+		await emailService.sendOTPVerification(user, otp);
+
+		return {
+			user: this._sanitizeUser(user)
+		};
+	}
+
+	/**
+	 * Verify OTP
+	 * @param {string} email - User email
+	 * @param {string} otp - OTP code
+	 * @returns {Object} Authentication data with JWT token
+	 */
+	async verifyOTP(email, otp) {
+		// Find user
+		const user = await userRepository.findByEmail(email);
+		if (!user) {
+			throw new NotFoundError('User not found');
+		}
+
+		// Check if user is already verified
+		if (user.isVerified) {
+			throw new ValidationError('User is already verified');
+		}
+
+		// Check if OTP matches
+		if (user.otp !== otp) {
+			throw new ValidationError('Invalid OTP');
+		}
+
+		// Check if OTP is expired
+		if (new Date() > user.otpExpiry) {
+			throw new ValidationError('OTP has expired. Please request a new one.');
+		}
+
+		// Update user as verified and active
+		user.isVerified = true;
+		user.isActive = true;
+		user.otp = null;
+		user.otpExpiry = null;
+		user.updatedAt = new Date();
+
+		await userRepository.update(user.id, user);
+
+		// Generate JWT token
+		const token = this._generateToken(user);
+
+		// Send welcome email
+		await emailService.sendWelcomeEmail(user);
+
+		return {
+			token,
+			user: this._sanitizeUser(user)
+		};
+	}
+
+	/**
+	 * Resend OTP
+	 * @param {string} email - User email
+	 * @returns {boolean} Success status
+	 */
+	async resendOTP(email) {
+		// Find user
+		const user = await userRepository.findByEmail(email);
+		if (!user) {
+			throw new NotFoundError('User not found');
+		}
+
+		// Check if user is already verified
+		if (user.isVerified) {
+			throw new ValidationError('User is already verified');
+		}
+
+		// Generate new OTP
+		const otp = this._generateOTP();
+		const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+
+		// Update user with new OTP
+		user.otp = otp;
+		user.otpExpiry = otpExpiry;
+		user.updatedAt = new Date();
+
+		await userRepository.update(user.id, user);
+
+		// Send OTP email
+		await emailService.sendOTPVerification(user, otp);
+
+		return true;
 	}
 
 	/**
@@ -51,6 +148,11 @@ class AuthService {
 		const user = await userRepository.findByEmail(email);
 		if (!user) {
 			throw new AuthenticationError('Invalid credentials');
+		}
+
+		// Check if user is verified
+		if (!user.isVerified) {
+			throw new AuthenticationError('Please verify your account first. Check your email for OTP.');
 		}
 
 		// Check if user is active
@@ -70,7 +172,6 @@ class AuthService {
 
 		// Generate JWT token
 		const token = this._generateToken(user);
-		console.log(user)
 		return {
 			token,
 			user: this._sanitizeUser(user)
@@ -87,7 +188,6 @@ class AuthService {
 		if (!user) {
 			throw new NotFoundError('User not found');
 		}
-		console.log(user)
 		return this._sanitizeUser(user);
 	}
 
@@ -172,6 +272,15 @@ class AuthService {
 	}
 
 	/**
+	 * Generate OTP
+	 * @returns {string} 6-digit OTP
+	 * @private
+	 */
+	_generateOTP() {
+		return crypto.randomInt(100000, 999999).toString();
+	}
+
+	/**
 	 * Generate JWT token
 	 * @param {Object} user - User object
 	 * @returns {string} JWT token
@@ -184,8 +293,8 @@ class AuthService {
 				email: user.email,
 				role: user.role
 			},
-			config.jwt.secret, // Changed from config.jwt to config.jwt.secret
-			{ expiresIn: config.jwt.expiresIn } // Also use config.jwt.expiresIn instead of config.jwtExpiresIn
+			config.jwt.secret,
+			{ expiresIn: config.jwt.expiresIn }
 		);
 	}
 
@@ -196,7 +305,7 @@ class AuthService {
 	 * @private
 	 */
 	_sanitizeUser(user) {
-		const { password, ...sanitizedUser } = user.toJSON ? user.toJSON() : user;
+		const { password, otp, otpExpiry, ...sanitizedUser } = user.toJSON ? user.toJSON() : user;
 		return sanitizedUser;
 	}
 }

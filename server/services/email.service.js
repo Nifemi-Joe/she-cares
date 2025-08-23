@@ -38,6 +38,43 @@ class EmailService {
 	}
 
 	/**
+	 * Send OTP verification email
+	 * @param {Object} user - User object
+	 * @param {string} otp - OTP code
+	 * @returns {Promise<Object>} Send result
+	 */
+	async sendOTPVerification(user, otp) {
+		const subject = `Verify Your Account - ${emailConfig.config.from.name}`;
+		const html = this._generateOTPEmailHTML(user, otp);
+		const text = this._generateOTPEmailText(user, otp);
+
+		return this.sendEmail({
+			to: user.email,
+			subject,
+			html,
+			text
+		});
+	}
+
+	/**
+	 * Send welcome email after verification
+	 * @param {Object} user - User object
+	 * @returns {Promise<Object>} Send result
+	 */
+	async sendWelcomeEmail(user) {
+		const subject = `Welcome to ${emailConfig.config.from.name}!`;
+		const html = this._generateWelcomeEmailHTML(user);
+		const text = this._generateWelcomeEmailText(user);
+
+		return this.sendEmail({
+			to: user.email,
+			subject,
+			html,
+			text
+		});
+	}
+
+	/**
 	 * Send an email with retry logic
 	 * @param {Object} emailData - Email data
 	 * @param {string|string[]} emailData.to - Recipient(s)
@@ -132,6 +169,399 @@ class EmailService {
 			logger.error(`Error sending template email: ${error.message}`);
 			throw new AppError(`Failed to send template email: ${error.message}`, 500);
 		}
+	}
+
+	/**
+	 * Generate OTP verification email HTML
+	 * @param {Object} user - User object
+	 * @param {string} otp - OTP code
+	 * @returns {string} HTML email content
+	 * @private
+	 */
+	_generateOTPEmailHTML(user, otp) {
+		return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Account</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            background-color: #ffffff;
+            margin: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .otp-container {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            text-align: center;
+            padding: 30px;
+            margin: 30px 0;
+            border-radius: 10px;
+        }
+        .otp-code {
+            font-size: 48px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .otp-label {
+            font-size: 16px;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        .info-box {
+            background-color: #e8f4fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        .warning-box {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px 30px;
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 25px;
+            margin: 20px 0;
+            font-weight: 500;
+            transition: transform 0.3s ease;
+        }
+        .button:hover {
+            transform: translateY(-2px);
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-links a {
+            display: inline-block;
+            margin: 0 10px;
+            color: #667eea;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1>Welcome to ${emailConfig.config.from.name}!</h1>
+            <p>Please verify your email address</p>
+        </div>
+        
+        <div class="content">
+            <h2>Hello ${user.name || 'there'}! 👋</h2>
+            <p>Thank you for registering with <strong>${emailConfig.config.from.name}</strong>. To complete your registration and activate your account, please use the verification code below:</p>
+            
+            <div class="otp-container">
+                <div class="otp-label">Your Verification Code</div>
+                <div class="otp-code">${otp}</div>
+                <div>Valid for 10 minutes</div>
+            </div>
+            
+            <div class="info-box">
+                <h3>📱 How to verify:</h3>
+                <ol>
+                    <li>Go back to the verification page</li>
+                    <li>Enter the 6-digit code above</li>
+                    <li>Click "Verify Account"</li>
+                </ol>
+            </div>
+            
+            <div class="warning-box">
+                <h3>⚠️ Important Notes:</h3>
+                <ul>
+                    <li>This code will expire in <strong>10 minutes</strong></li>
+                    <li>Don't share this code with anyone</li>
+                    <li>If you didn't request this, please ignore this email</li>
+                </ul>
+            </div>
+            
+            <p>If you're having trouble with verification, feel free to contact our support team.</p>
+        </div>
+        
+        <div class="footer">
+            <p>Best regards,<br>
+            The ${emailConfig.config.from.name} Team</p>
+            
+            <div class="social-links">
+                <a href="#">Help Center</a> |
+                <a href="#">Contact Support</a> |
+                <a href="#">Privacy Policy</a>
+            </div>
+            
+            <p style="margin-top: 20px; font-size: 12px; color: #999;">
+                This is an automated email. Please do not reply to this message.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+		`;
+	}
+
+	/**
+	 * Generate OTP verification email text
+	 * @param {Object} user - User object
+	 * @param {string} otp - OTP code
+	 * @returns {string} Plain text email content
+	 * @private
+	 */
+	_generateOTPEmailText(user, otp) {
+		return `
+Hello ${user.name || 'there'},
+
+Thank you for registering with ${emailConfig.config.from.name}!
+
+To complete your registration, please use the following verification code:
+
+VERIFICATION CODE: ${otp}
+
+This code is valid for 10 minutes. Please enter it on the verification page to activate your account.
+
+Important:
+- Do not share this code with anyone
+- If you didn't request this verification, please ignore this email
+- For support, contact our team
+
+Best regards,
+The ${emailConfig.config.from.name} Team
+
+---
+This is an automated email. Please do not reply.
+		`;
+	}
+
+	/**
+	 * Generate welcome email HTML
+	 * @param {Object} user - User object
+	 * @returns {string} HTML email content
+	 * @private
+	 */
+	_generateWelcomeEmailHTML(user) {
+		return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to ${emailConfig.config.from.name}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #f4f4f4;
+        }
+        .email-container {
+            background-color: #ffffff;
+            margin: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .welcome-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            padding: 30px;
+            margin: 30px 0;
+            border-radius: 10px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .feature-item {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }
+        .feature-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 25px;
+            margin: 20px 10px;
+            font-weight: 500;
+            transition: transform 0.3s ease;
+        }
+        .button:hover {
+            transform: translateY(-2px);
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px 30px;
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1>🎉 Welcome Aboard!</h1>
+            <p>Your account has been successfully verified</p>
+        </div>
+        
+        <div class="content">
+            <div class="welcome-box">
+                <h2>Hello ${user.name}!</h2>
+                <p>Welcome to ${emailConfig.config.from.name}. We're excited to have you on board!</p>
+            </div>
+            
+            <p>Your account has been successfully verified and activated. You can now access all features of our platform.</p>
+            
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="feature-icon">👤</div>
+                    <h3>Profile Management</h3>
+                    <p>Update your personal information and preferences</p>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">📊</div>
+                    <h3>Dashboard</h3>
+                    <p>Access your personalized dashboard and analytics</p>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Security</h3>
+                    <p>Manage your account security settings</p>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">📧</div>
+                    <h3>Notifications</h3>
+                    <p>Stay updated with email and app notifications</p>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin: 40px 0;">
+                <a href="#" class="button">Get Started</a>
+                <a href="#" class="button" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">Explore Features</a>
+            </div>
+            
+            <h3>Need Help?</h3>
+            <p>If you have any questions or need assistance, our support team is here to help:</p>
+            <ul>
+                <li>📧 Email: support@${emailConfig.config.from.name.toLowerCase().replace(/\s+/g, '')}.com</li>
+                <li>📞 Phone: +1 (555) 123-4567</li>
+                <li>💬 Live Chat: Available 24/7 on our website</li>
+            </ul>
+        </div>
+        
+        <div class="footer">
+            <p>Thank you for choosing ${emailConfig.config.from.name}!</p>
+            <p style="margin-top: 20px; font-size: 12px; color: #999;">
+                This email was sent to ${user.email}. If you have any questions, contact our support team.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+		`;
+	}
+
+	/**
+	 * Generate welcome email text
+	 * @param {Object} user - User object
+	 * @returns {string} Plain text email content
+	 * @private
+	 */
+	_generateWelcomeEmailText(user) {
+		return `
+Hello ${user.name}!
+
+Welcome to ${emailConfig.config.from.name}! 🎉
+
+Your account has been successfully verified and activated. We're excited to have you on board!
+
+What's Next?
+- Complete your profile setup
+- Explore our dashboard and features
+- Customize your notification preferences
+- Start using all available tools
+
+Need Help?
+Our support team is here to assist you:
+- Email: support@${emailConfig.config.from.name.toLowerCase().replace(/\s+/g, '')}.com
+- Phone: +1 (555) 123-4567
+- Live Chat: Available 24/7 on our website
+
+Thank you for choosing ${emailConfig.config.from.name}!
+
+Best regards,
+The ${emailConfig.config.from.name} Team
+
+---
+This email was sent to ${user.email}
+		`;
 	}
 
 	/**

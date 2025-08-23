@@ -39,8 +39,8 @@ class OrderValidator {
 					itemError.quantity = 'Quantity must be a positive integer';
 				}
 
-				if (item.unitPrice !== undefined && (isNaN(parseFloat(item.unitPrice)) || parseFloat(item.unitPrice) < 0)) {
-					itemError.unitPrice = 'Unit price must be a non-negative number';
+				if (item.price !== undefined && (isNaN(parseFloat(item.price)) || parseFloat(item.price) < 0)) {
+					itemError.price = 'Price must be a non-negative number';
 				}
 
 				if (Object.keys(itemError).length > 0) {
@@ -53,31 +53,31 @@ class OrderValidator {
 			}
 		}
 
-		// Delivery method validation
-		if (orderData.deliveryMethod) {
-			if (!['pickup', 'delivery'].includes(orderData.deliveryMethod)) {
-				errors.deliveryMethod = 'Delivery method must be either "pickup" or "delivery"';
+		// Shipping method validation
+		if (orderData.shippingMethod) {
+			if (!['pickup', 'delivery'].includes(orderData.shippingMethod)) {
+				errors.shippingMethod = 'Shipping method must be either "pickup" or "delivery"';
 			}
 
-			// If delivery method is "delivery", delivery address is required
-			if (orderData.deliveryMethod === 'delivery') {
-				if (!orderData.deliveryAddress) {
-					errors.deliveryAddress = 'Delivery address is required for delivery orders';
-				} else if (typeof orderData.deliveryAddress !== 'object') {
-					errors.deliveryAddress = 'Delivery address must be an object';
+			// If shipping method is "delivery", shipping address is required
+			if (orderData.shippingMethod === 'delivery') {
+				if (!orderData.shippingAddress) {
+					errors.shippingAddress = 'Shipping address is required for delivery orders';
+				} else if (typeof orderData.shippingAddress !== 'object') {
+					errors.shippingAddress = 'Shipping address must be an object';
 				} else {
 					const addressErrors = {};
 
-					if (!orderData.deliveryAddress.street || orderData.deliveryAddress.street.trim() === '') {
+					if (!orderData.shippingAddress.street || orderData.shippingAddress.street.trim() === '') {
 						addressErrors.street = 'Street address is required';
 					}
 
-					if (!orderData.deliveryAddress.city || orderData.deliveryAddress.city.trim() === '') {
+					if (!orderData.shippingAddress.city || orderData.shippingAddress.city.trim() === '') {
 						addressErrors.city = 'City is required';
 					}
 
 					if (Object.keys(addressErrors).length > 0) {
-						errors.deliveryAddress = addressErrors;
+						errors.shippingAddress = addressErrors;
 					}
 				}
 			}
@@ -91,6 +91,37 @@ class OrderValidator {
 		// Payment status validation
 		if (orderData.paymentStatus && !['pending', 'paid', 'partially_paid', 'refunded', 'failed'].includes(orderData.paymentStatus)) {
 			errors.paymentStatus = 'Invalid payment status';
+		}
+
+		// Shipping cost validation - allow "TBD" for delivery orders
+		if (orderData.shippingCost !== undefined) {
+			if (orderData.shippingMethod === 'delivery') {
+				// For delivery orders, allow "TBD" or valid numbers
+				if (orderData.shippingCost !== 'TBD' &&
+					(isNaN(parseFloat(orderData.shippingCost)) || parseFloat(orderData.shippingCost) < 0)) {
+					errors.shippingCost = 'Shipping cost must be "TBD" or a non-negative number for delivery orders';
+				}
+			} else {
+				// For pickup orders, must be a number (usually 0)
+				if (isNaN(parseFloat(orderData.shippingCost)) || parseFloat(orderData.shippingCost) < 0) {
+					errors.shippingCost = 'Shipping cost must be a non-negative number for pickup orders';
+				}
+			}
+		}
+
+		// Total amount validation - allow "TBD" when shipping cost is "TBD"
+		if (orderData.totalAmount !== undefined) {
+			if (orderData.shippingCost === 'TBD') {
+				// If shipping cost is TBD, total amount should also be TBD
+				if (orderData.totalAmount !== 'TBD') {
+					errors.totalAmount = 'Total amount should be "TBD" when shipping cost is "TBD"';
+				}
+			} else {
+				// Otherwise, must be a valid number
+				if (isNaN(parseFloat(orderData.totalAmount)) || parseFloat(orderData.totalAmount) < 0) {
+					errors.totalAmount = 'Total amount must be a non-negative number';
+				}
+			}
 		}
 
 		return {
@@ -127,8 +158,8 @@ class OrderValidator {
 						}
 					}
 
-					if (item.unitPrice !== undefined && (isNaN(parseFloat(item.unitPrice)) || parseFloat(item.unitPrice) < 0)) {
-						itemError.unitPrice = 'Unit price must be a non-negative number';
+					if (item.price !== undefined && (isNaN(parseFloat(item.price)) || parseFloat(item.price) < 0)) {
+						itemError.price = 'Price must be a non-negative number';
 					}
 
 					if (Object.keys(itemError).length > 0) {
@@ -152,30 +183,66 @@ class OrderValidator {
 			errors.paymentStatus = 'Invalid payment status';
 		}
 
-		// Delivery method validation (if present)
-		if (updateData.deliveryMethod && !['pickup', 'delivery'].includes(updateData.deliveryMethod)) {
-			errors.deliveryMethod = 'Delivery method must be either "pickup" or "delivery"';
+		// Shipping method validation (if present)
+		if (updateData.shippingMethod && !['pickup', 'delivery'].includes(updateData.shippingMethod)) {
+			errors.shippingMethod = 'Shipping method must be either "pickup" or "delivery"';
 		}
 
-		// Delivery address validation (if present)
-		if (updateData.deliveryAddress !== undefined) {
-			if (typeof updateData.deliveryAddress !== 'object') {
-				errors.deliveryAddress = 'Delivery address must be an object';
+		// Shipping address validation (if present)
+		if (updateData.shippingAddress !== undefined) {
+			if (typeof updateData.shippingAddress !== 'object') {
+				errors.shippingAddress = 'Shipping address must be an object';
 			} else {
 				const addressErrors = {};
 
-				if (updateData.deliveryAddress.street !== undefined && updateData.deliveryAddress.street.trim() === '') {
+				if (updateData.shippingAddress.street !== undefined && updateData.shippingAddress.street.trim() === '') {
 					addressErrors.street = 'Street address cannot be empty';
 				}
 
-				if (updateData.deliveryAddress.city !== undefined && updateData.deliveryAddress.city.trim() === '') {
+				if (updateData.shippingAddress.city !== undefined && updateData.shippingAddress.city.trim() === '') {
 					addressErrors.city = 'City cannot be empty';
 				}
 
 				if (Object.keys(addressErrors).length > 0) {
-					errors.deliveryAddress = addressErrors;
+					errors.shippingAddress = addressErrors;
 				}
 			}
+		}
+
+		// Shipping cost validation for updates
+		if (updateData.shippingCost !== undefined) {
+			if (updateData.shippingCost !== 'TBD' &&
+				(isNaN(parseFloat(updateData.shippingCost)) || parseFloat(updateData.shippingCost) < 0)) {
+				errors.shippingCost = 'Shipping cost must be "TBD" or a non-negative number';
+			}
+		}
+
+		// Total amount validation for updates
+		if (updateData.totalAmount !== undefined) {
+			if (updateData.totalAmount !== 'TBD' &&
+				(isNaN(parseFloat(updateData.totalAmount)) || parseFloat(updateData.totalAmount) < 0)) {
+				errors.totalAmount = 'Total amount must be "TBD" or a non-negative number';
+			}
+		}
+
+		return {
+			isValid: Object.keys(errors).length === 0,
+			errors
+		};
+	}
+
+	/**
+	 * Validate delivery fee update
+	 * @param {number} deliveryFee - Delivery fee to validate
+	 * @returns {Object} Validation result with errors if any
+	 */
+	validateDeliveryFeeUpdate(deliveryFee) {
+		const errors = {};
+
+		if (deliveryFee === undefined || deliveryFee === null) {
+			errors.deliveryFee = 'Delivery fee is required';
+		} else if (isNaN(parseFloat(deliveryFee)) || parseFloat(deliveryFee) < 0) {
+			errors.deliveryFee = 'Delivery fee must be a non-negative number';
 		}
 
 		return {
@@ -238,8 +305,8 @@ class OrderValidator {
 			errors.quantity = 'Quantity must be a positive integer';
 		}
 
-		if (item.unitPrice !== undefined && (isNaN(parseFloat(item.unitPrice)) || parseFloat(item.unitPrice) < 0)) {
-			errors.unitPrice = 'Unit price must be a non-negative number';
+		if (item.price !== undefined && (isNaN(parseFloat(item.price)) || parseFloat(item.price) < 0)) {
+			errors.price = 'Price must be a non-negative number';
 		}
 
 		return {

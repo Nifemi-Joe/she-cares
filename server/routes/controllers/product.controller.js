@@ -164,10 +164,6 @@ class ProductController {
 	 */
 	// Debug version of updateProduct controller method
 	async updateProduct(req, res, next) {
-		console.log('=== UPDATE PRODUCT DEBUG ===');
-		console.log('1. Request received:', req.params.id);
-		console.log('2. Request body:', req.body);
-		console.log('3. Files:', req.files);
 
 		try {
 			const productId = req.params.id;
@@ -194,11 +190,7 @@ class ProductController {
 				}));
 				updateData.images = [...(updateData.images || []), ...uploadedImages];
 			}
-
-			console.log('6. Calling productService.updateProduct...');
 			const updatedProduct = await this.productService.updateProduct(productId, updateData);
-
-			console.log('7. Service call completed:', updatedProduct);
 
 			res.status(200).json({
 				responseCode: 200,
@@ -206,9 +198,7 @@ class ProductController {
 				responseMessage: 'Product updated successfully.'
 			});
 
-			console.log('8. Response sent successfully');
 		} catch (error) {
-			console.log('ERROR in updateProduct controller:', error);
 			this.logger.error(`Error in updateProduct controller: ${error.message}`);
 
 			if (error.message.includes('not found')) {
@@ -499,26 +489,237 @@ class ProductController {
 	 * @param {Object} res - Express response object
 	 * @param {Function} next - Express next middleware function
 	 */
-	async getTopProducts(req, res, next) {
+	async getTopProducts(req, res) {
 		try {
-			const limit = req.query.limit ? parseInt(req.query.limit, 10) : 5;
-			const filters = {
-				categoryId: req.query.categoryId,
-				isAvailable: req.query.available !== undefined
-					? req.query.available === 'true'
-					: undefined
-			};
+			const { limit = 5, criteria = 'units', category, minRevenue, minUnits } = req.query;
 
-			const products = await this.productService.getTopProducts(limit, filters);
+			const filters = {};
 
-			res.status(200).json({
-				responseCode: 200,
-				responseData: products,
-				responseMessage: 'Top products retrieved successfully.'
+			// Add category filter if provided
+			if (category) {
+				filters.categoryId = category;
+			}
+
+			let topProducts;
+
+			if (criteria && criteria !== 'units') {
+				topProducts = await this.productService.getTopProductsByCriteria(
+					criteria,
+					parseInt(limit),
+					filters
+				);
+			} else {
+				topProducts = await this.productService.getTopProducts(
+					parseInt(limit),
+					filters
+				);
+			}
+
+			// Apply additional filters if provided
+			let filteredProducts = topProducts;
+
+			if (minRevenue) {
+				filteredProducts = filteredProducts.filter(
+					product => product.salesAnalytics.totalRevenue >= parseFloat(minRevenue)
+				);
+			}
+
+			if (minUnits) {
+				filteredProducts = filteredProducts.filter(
+					product => product.salesAnalytics.totalUnitsSold >= parseInt(minUnits)
+				);
+			}
+
+			res.json({
+				success: true,
+				message: 'Top products retrieved successfully',
+				responseData: {
+					products: filteredProducts,
+					summary: {
+						totalProducts: filteredProducts.length,
+						totalRevenue: filteredProducts.reduce((sum, p) => sum + p.salesAnalytics.totalRevenue, 0),
+						totalUnitsSold: filteredProducts.reduce((sum, p) => sum + p.salesAnalytics.totalUnitsSold, 0),
+						totalOrders: filteredProducts.reduce((sum, p) => sum + p.salesAnalytics.orderCount, 0),
+						criteria: criteria || 'units',
+						dateGenerated: new Date().toISOString()
+					}
+				}
 			});
 		} catch (error) {
-			this.logger.error(`Error in getTopProducts controller: ${error.message}`);
-			next(error);
+			console.error('Error fetching top products:', error);
+			res.status(500).json({
+				success: false,
+				message: 'Failed to fetch top products',
+				error: error.message
+			});
+		}
+	}
+
+	/**
+	 * Get product performance analytics
+	 * GET /api/products/:id/analytics
+	 */
+	async getProductPerformance(req, res) {
+		try {
+			const { id } = req.params;
+			const { startDate, endDate } = req.query;
+
+			const dateRange = {};
+			if (startDate) dateRange.startDate = startDate;
+			if (endDate) dateRange.endDate = endDate;
+
+			const performance = await this.productService.getProductPerformance(id, dateRange);
+
+			res.json({
+				success: true,
+				message: 'Product performance retrieved successfully',
+				responseData: {
+					productId: id,
+					performance,
+					dateRange,
+					generatedAt: new Date().toISOString()
+				}
+			});
+		} catch (error) {
+			console.error('Error fetching product performance:', error);
+			res.status(500).json({
+				success: false,
+				message: 'Failed to fetch product performance',
+				error: error.message
+			});
+		}
+	}
+
+	/**
+	 * Get top products by different time periods
+	 * GET /api/products/analytics/top/period
+	 */
+	async getTopProductsByPeriod(req, res) {
+		try {
+			const { period = 'month', limit = 5, criteria = 'units' } = req.query;
+
+			// Calculate date range based on period
+			const now = new Date();
+			let startDate;
+
+			switch (period) {
+				case 'week':
+					startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+					break;
+				case 'month':
+					startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+					break;
+				case 'quarter':
+					const quarterStart = Math.floor(now.getMonth() / 3) * 3;
+					startDate = new Date(now.getFullYear(), quarterStart, 1);
+					break;
+				case 'year':
+					startDate = new Date(now.getFullYear(), 0, 1);
+					break;
+				default:
+					startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+			}
+
+			// Add date filter to the service call
+			const filters = {
+				createdAt: { $gte: startDate }
+			};
+
+			const topProducts = await this.productService.getTopProductsByCriteria(
+				criteria,
+				parseInt(limit),
+				filters
+			);
+
+			res.json({
+				success: true,
+				message: `Top products for ${period} retrieved successfully`,
+				responseData: {
+					products: topProducts,
+					period: {
+						type: period,
+						startDate: startDate.toISOString(),
+						endDate: now.toISOString()
+					},
+					summary: {
+						totalProducts: topProducts.length,
+						totalRevenue: topProducts.reduce((sum, p) => sum + p.salesAnalytics.totalRevenue, 0),
+						totalUnitsSold: topProducts.reduce((sum, p) => sum + p.salesAnalytics.totalUnitsSold, 0),
+						criteria
+					}
+				}
+			});
+		} catch (error) {
+			console.error('Error fetching top products by period:', error);
+			res.status(500).json({
+				success: false,
+				message: 'Failed to fetch top products by period',
+				error: error.message
+			});
+		}
+	}
+
+	/**
+	 * Get sales comparison between products
+	 * GET /api/products/analytics/compare
+	 */
+	async compareProducts(req, res) {
+		try {
+			const { productIds, startDate, endDate } = req.query;
+
+			if (!productIds) {
+				return res.status(400).json({
+					success: false,
+					message: 'Product IDs are required for comparison'
+				});
+			}
+
+			const ids = Array.isArray(productIds) ? productIds : productIds.split(',');
+			const dateRange = {};
+			if (startDate) dateRange.startDate = startDate;
+			if (endDate) dateRange.endDate = endDate;
+
+			const comparisons = await Promise.all(
+				ids.map(id => this.productService.getProductPerformance(id.trim(), dateRange))
+			);
+
+			// Get product details
+			const products = await Promise.all(
+				ids.map(id => this.productService.getProductById(id.trim()))
+			);
+
+			const comparisonData = comparisons.map((performance, index) => ({
+				product: products[index],
+				performance,
+				productId: ids[index]
+			}));
+
+			res.json({
+				success: true,
+				message: 'Product comparison retrieved successfully',
+				responseData: {
+					comparison: comparisonData,
+					summary: {
+						totalProducts: comparisonData.length,
+						dateRange,
+						bestPerformer: {
+							byRevenue: comparisonData.reduce((max, current) =>
+								current.performance.totalRevenue > max.performance.totalRevenue ? current : max
+							),
+							byUnits: comparisonData.reduce((max, current) =>
+								current.performance.totalUnitsSold > max.performance.totalUnitsSold ? current : max
+							)
+						}
+					}
+				}
+			});
+		} catch (error) {
+			console.error('Error comparing products:', error);
+			res.status(500).json({
+				success: false,
+				message: 'Failed to compare products',
+				error: error.message
+			});
 		}
 	}
 }
@@ -526,6 +727,7 @@ class ProductController {
 // Create a default export that instantiates the controller with the correct dependencies
 const productRepository = require('../../data/repositories/product.repository');
 const categoryRepository = require('../../data/repositories/category.repository');
+const orderRepository = require('../../data/repositories/order.repository');
 const eventDispatcher = require('../../domain/events/event-dispatcher');
 const logger = console;
 
@@ -534,7 +736,8 @@ const productService = new ProductService(
 	productRepository,
 	categoryRepository,
 	eventDispatcher,
-	logger
+	logger,
+	orderRepository
 );
 
 // Create an instance of the product controller with the product service

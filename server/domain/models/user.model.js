@@ -27,7 +27,7 @@ class User {
 		            fullName,
 		            email,
 		            password,
-		            role = 'staff',
+		            role = 'client',
 		            isActive = true,
 		            phoneNumber = '',
 		            preferences = {

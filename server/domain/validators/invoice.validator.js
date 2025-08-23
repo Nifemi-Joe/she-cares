@@ -58,7 +58,17 @@ const createInvoiceBodySchema = Joi.object({
 			addressSchema // Structured address object
 		).optional()
 	}).optional(),
+	signature: Joi.object({
+		name: Joi.string().required().messages({
+			'string.empty': 'Signature name cannot be empty',
+			'any.required': 'Signature name is required'
+		}),
+		title: Joi.string().required().messages({
+			'string.empty': 'Signature title cannot be empty',
+			'any.required': 'Signature title is required'
+		}),
 
+	}).optional(),
 	// Business info
 	businessInfo: Joi.object({
 		name: Joi.string().optional(),

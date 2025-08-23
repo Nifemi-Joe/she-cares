@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= documentType %> - <%= invoiceNumber %></title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header Section */
+        .header {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .header-left {
+            flex: 1;
+        }
+
+        .company-name {
+            font-size: 32px;
+            font-weight: bold;
+            color: #000;
+            margin-bottom: 5px;
+        }
+
+        .company-subtitle {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .company-address {
+            font-size: 14px;
+            color: #000;
+            line-height: 1.3;
+            white-space: pre-line;
+        }
+
+        .document-type {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #28a745;
+            color: #fff;
+            padding: 15px 30px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 8px 0 0 8px;
+        }
+
+        /* Delivery Details */
+        .delivery-details {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .details-section {
+            flex: 1;
+        }
+
+        .details-section h3 {
+            font-size: 14px;
+            color: #495057;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #28a745;
+            padding-bottom: 5px;
+        }
+
+        .details-item {
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #212529;
+        }
+
+        .details-item strong {
+            color: #495057;
+        }
+
+        /* Client Information */
+        .client-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #fff;
+            border: 2px solid #28a745;
+            border-radius: 8px;
+        }
+
+        .deliver-to-label {
+            font-size: 16px;
+            font-weight: bold;
+            color: #28a745;
+            margin-bottom: 10px;
+        }
+
+        .client-info {
+            font-size: 14px;
+            color: #000;
+            line-height: 1.6;
+        }
+
+        /* Items Table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .items-table th {
+            background: #28a745;
+            color: #fff;
+            padding: 15px 10px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .items-table th.center { text-align: center; }
+        .items-table th.right { text-align: right; }
+
+        .items-table td {
+            padding: 12px 10px;
+            border: 1px solid #dee2e6;
+            font-size: 12px;
+        }
+
+        .items-table td.center { text-align: center; }
+        .items-table td.right { text-align: right; }
+
+        .items-table .item-row:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .items-table .item-row:nth-child(odd) {
+            background: #ffffff;
+        }
+
+        /* Signature Section */
+        .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin: 40px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .signature-box {
+            width: 45%;
+            text-align: center;
+            padding: 20px;
+            border: 2px dashed #28a745;
+            border-radius: 5px;
+        }
+
+        .signature-label {
+            font-weight: bold;
+            margin-bottom: 40px;
+            color: #495057;
+        }
+
+        .signature-line {
+            border-top: 2px solid #000;
+            margin-top: 30px;
+            padding-top: 10px;
+        }
+
+        .signature-details {
+            font-size: 11px;
+            color: #666;
+        }
+
+        /* Footer */
+        .footer {
+            background: #28a745;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+
+        .footer-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .footer-text {
+            font-size: 12px;
+        }
+
+        .notes-section {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .notes-title {
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 5px;
+        }
+
+        .notes-text {
+            font-size: 12px;
+            color: #856404;
+            font-style: italic;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .container {
+                max-width: none;
+                width: 100%;
+                padding: 10px;
+            }
+
+            .signature-section {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- Header Section -->
+    <div class="header">
+        <div class="header-left">
+            <div class="company-name"><%= businessInfo.name %></div>
+            <div class="company-subtitle">Premium Food & Grocery Services</div>
+            <div class="company-address"><%= businessInfo.address %></div>
+        </div>
+        <div class="document-type"><%= documentType %></div>
+    </div>
+
+    <!-- Delivery Details -->
+    <div class="delivery-details">
+        <div class="details-section">
+            <h3>Delivery Information</h3>
+            <div class="details-item"><strong>Delivery Note #:</strong> <%= invoiceNumber %></div>
+            <div class="details-item"><strong>Order ID:</strong> <%= orderId %></div>
+            <div class="details-item"><strong>Delivery Date:</strong> <%= issueDate %></div>
+            <div class="details-item"><strong>Status:</strong> <%= status %></div>
+        </div>
+        <div class="details-section">
+            <h3>Contact Information</h3>
+            <div class="details-item"><strong>Phone:</strong> <%= businessInfo.phone %></div>
+            <div class="details-item"><strong>Email:</strong> <%= businessInfo.email %></div>
+            <div class="details-item"><strong>Generated:</strong> <%= generatedDate %></div>
+        </div>
+    </div>
+
+    <!-- Client Information -->
+    <div class="client-section">
+        <div class="deliver-to-label">DELIVER TO:</div>
+        <div class="client-info">
+            <strong><%= clientInfo.name %></strong><br>
+            <% if (clientInfo.address) { %><%= clientInfo.address %><br><% } %>
+            <% if (clientInfo.phone) { %>Phone: <%= clientInfo.phone %><br><% } %>
+            <% if (clientInfo.email) { %>Email: <%= clientInfo.email %><% } %>
+        </div>
+    </div>
+
+    <!-- Items Table -->
+    <table class="items-table">
+        <thead>
+        <tr>
+            <th>S/N</th>
+            <th>Item Description</th>
+            <th class="center">Quantity Ordered</th>
+            <th class="center">Quantity Delivered</th>
+            <th>Condition</th>
+        </tr>
+        </thead>
+        <tbody>
+        <% items.forEach(function(item, index) { %>
+            <tr class="item-row">
+                <td class="center"><%= index + 1 %></td>
+                <td><%= item.name %></td>
+                <td class="center"><%= item.quantity %></td>
+                <td class="center"><%= item.deliveredQuantity || item.quantity %></td>
+                <td><%= item.condition || 'Good' %></td>
+            </tr>
+        <% }); %>
+        </tbody>
+    </table>
+
+    <!-- Notes Section -->
+    <% if (notes) { %>
+        <div class="notes-section">
+            <div class="notes-title">Special Instructions / Notes:</div>
+            <div class="notes-text"><%= notes %></div>
+        </div>
+    <% } %>
+
+    <!-- Signature Section -->
+    <div class="signature-section">
+        <div class="signature-box">
+            <div class="signature-label">DELIVERED BY</div>
+            <div class="signature-line">
+                <div class="signature-details">
+                    Signature & Date<br>
+                    Driver Name: ________________<br>
+                    Time: ________________
+                </div>
+            </div>
+        </div>
+        <div class="signature-box">
+            <div class="signature-label">RECEIVED BY</div>
+            <div class="signature-line">
+                <div class="signature-details">
+                    Signature & Date<br>
+                    Customer Name: ________________<br>
+                    Time: ________________
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-title">Delivery Completed Successfully</div>
+        <div class="footer-text">
+            This delivery note serves as proof of delivery. Please keep this document for your records.<br>
+            For any issues or concerns, please contact us immediately at <%= businessInfo.phone %>
+        </div>
+    </div>
+</div>
+</body>
+</html>

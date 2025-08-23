@@ -5,6 +5,7 @@ const Client = require('../data/schemas/client.schema');
 const Product = require('../data/schemas/product.schema');
 const PDFService = require('./pdf.service');
 const EmailService = require('./email.service');
+const htmlPDFService = require('./html-pdf.service');
 
 class InvoiceService {
 	// Updated createInvoice method for InvoiceService
@@ -53,7 +54,7 @@ class InvoiceService {
 				productId: item.productId || undefined, // Convert empty string to undefined
 				name: item.name,
 				quantity: parseFloat(item.quantity),
-				stockUnit: item.stockUnit || 'piece',
+				unit: item.unit || 'piece',
 				unitPrice: parseFloat(item.unitPrice),
 				totalPrice: parseFloat(item.quantity) * parseFloat(item.unitPrice)
 			}));
@@ -73,7 +74,7 @@ class InvoiceService {
 			const invoice = new Invoice({
 				invoiceNumber,
 				type: invoiceData.orderId ? 'order_based' : 'standalone',
-				orderId: invoiceData.orderId || undefined, // Convert null to undefined
+				orderId: invoiceData.orderId || null, // Convert null to undefined
 				clientId: invoiceData.clientId || undefined,
 				clientInfo,
 				businessInfo: this.getBusinessInfo(invoiceData.businessInfo),
@@ -132,21 +133,6 @@ class InvoiceService {
 			};
 		} catch (error) {
 			throw new Error(`Failed to fetch invoices: ${error.message}`);
-		}
-	}
-
-	async getInvoiceById(invoiceId) {
-		try {
-			const invoice = await Invoice.findById(invoiceId)
-				.populate('clientId', 'name email phone address');
-
-			if (!invoice) {
-				throw new Error('Invoice not found');
-			}
-
-			return invoice;
-		} catch (error) {
-			throw new Error(`Failed to fetch invoice: ${error.message}`);
 		}
 	}
 
@@ -245,10 +231,27 @@ class InvoiceService {
 	 * @param {Object} options - Download options
 	 * @returns {Object} - PDF buffer and filename for download
 	 */
+	/**
+	 * Enhanced download invoice with proper data formatting
+	 * @param {string} invoiceId - Invoice ID
+	 * @param {Object} options - Download options
+	 * @returns {Promise<Object>} PDF buffer and metadata
+	 */
 	async downloadInvoice(invoiceId, options = {}) {
 		try {
-			// Get invoice data
-			const invoice = await this.getInvoiceById(invoiceId);
+			// Get invoice data with populated references
+			const invoice = await Invoice.findById(invoiceId)
+				.populate('clientId', 'name email phone address')
+				.populate('orderId')
+				.populate('items.productId', 'name sku')
+				.lean();
+
+			if (!invoice) {
+				throw new Error('Invoice not found');
+			}
+
+			// Format invoice data for PDF generation
+			// const formattedInvoice = this._formatInvoiceForPDF(invoice);
 
 			// Generate PDF buffer
 			const pdfBuffer = await PDFService.generateInvoice(invoice);
@@ -265,13 +268,131 @@ class InvoiceService {
 				contentType: 'application/pdf',
 				size: pdfBuffer.length,
 				invoiceNumber: invoice.invoiceNumber,
-				clientName: invoice.clientInfo.name,
+				clientName: invoice.clientInfo?.name || invoice.clientId?.name,
 				totalAmount: invoice.totalAmount
 			};
 		} catch (error) {
 			throw new Error(`Failed to download invoice: ${error.message}`);
 		}
 	}
+
+	/**
+	 * Format invoice data for PDF generation
+	 * @param {Object} invoice - Raw invoice data
+	 * @returns {Object} Formatted invoice data
+	 * @private
+	 */
+	_formatInvoiceForPDF(invoice) {
+		// Ensure all required fields are present with defaults
+		const formattedInvoice = {
+			// Basic invoice info
+			invoiceNumber: invoice.invoiceNumber,
+			orderId: invoice.orderId?._id || invoice.orderId,
+			id: invoice._id,
+
+			// Dates
+			issueDate: invoice.issueDate || invoice.createdAt,
+			dueDate: invoice.dueDate || this._calculateDueDate(invoice.issueDate || invoice.createdAt),
+			createdAt: invoice.createdAt,
+
+			// Status
+			status: invoice.status || 'pending',
+
+			// Client information (prioritize clientInfo over populated clientId)
+			clientInfo: {
+				name: invoice.clientInfo?.name || invoice.clientId?.name || 'N/A',
+				email: invoice.clientInfo?.email || invoice.clientId?.email || '',
+				phone: invoice.clientInfo?.phone || invoice.clientId?.phone || '',
+				address: invoice.clientInfo?.address || invoice.clientId?.address || ''
+			},
+
+			// Business information
+			businessInfo: invoice.businessInfo || {
+				name: 'She Cares',
+				address: 'H91, Ikota Shopping Complex, VGC\nLagos, Nigeria',
+				email: 'globalsjxinfo@gmail.com',
+				phone: '+2348023132369'
+			},
+
+			// Items - ensure proper formatting
+			items: this._formatItems(invoice.items),
+
+			// Financial totals
+			subtotal: invoice.subtotal || 0,
+			tax: invoice.tax || 0,
+			discount: invoice.discount || 0,
+			deliveryFee: invoice.deliveryFee || 0,
+			totalAmount: invoice.totalAmount || 0,
+			paidAmount: invoice.paidAmount || 0,
+
+			// Payment details
+			paymentDetails: invoice.paymentDetails || {
+				bankName: 'First Bank',
+				accountName: 'SheCares Foods',
+				accountNumber: '0123456789',
+				bankCode: '000000'
+			},
+
+			// Terms and notes
+			paymentTerms: invoice.paymentTerms || 'Payment due within 7 days',
+			notes: invoice.notes || ''
+		};
+
+		return formattedInvoice;
+	}
+
+	/**
+	 * Format items for PDF display
+	 * @param {Array} items - Raw items array
+	 * @returns {Array} Formatted items
+	 * @private
+	 */
+	_formatItems(items) {
+		if (!items || !Array.isArray(items)) {
+			return [];
+		}
+
+		return items.map(item => ({
+			name: item.name || item.productId?.name || 'Unknown Product',
+			quantity: item.quantity || 0,
+			unit: item.unit || 'piece',
+			unitPrice: item.unitPrice || item.price || 0,
+			totalPrice: item.totalPrice || (item.quantity * (item.unitPrice || item.price)) || 0,
+			sku: item.productId?.sku || item.sku || ''
+		}));
+	}
+
+	/**
+	 * Calculate due date (default 7 days from issue date)
+	 * @param {Date} issueDate - Issue date
+	 * @returns {Date} Due date
+	 * @private
+	 */
+	_calculateDueDate(issueDate) {
+		const date = new Date(issueDate);
+		date.setDate(date.getDate() + 7);
+		return date;
+	}
+
+	/**
+	 * Get invoice by ID with proper population
+	 * @param {string} invoiceId - Invoice ID
+	 * @returns {Promise<Object>} Invoice data
+	 */
+	async getInvoiceById(invoiceId) {
+		const invoice = await Invoice.findById(invoiceId)
+			.populate('clientId')
+			.populate('orderId')
+			.populate('items.productId')
+			.lean();
+
+		if (!invoice) {
+			throw new Error('Invoice not found');
+		}
+
+		return this._formatInvoiceForPDF(invoice);
+	}
+
 
 	/**
 	 * Download multiple invoices as a ZIP file

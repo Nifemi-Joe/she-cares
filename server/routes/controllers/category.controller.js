@@ -157,7 +157,6 @@ class CategoryController {
 			}
 
 			const products = await categoryService.getProductsByCategory(id, options);
-			console.log(products)
 			res.status(200).json({
 				responseCode: 200,
 				responseData: products,

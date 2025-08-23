@@ -108,9 +108,15 @@ const OrderSchema = new mongoose.Schema({
 		min: [0, 'Subtotal cannot be negative']
 	},
 	shippingCost: {
-		type: Number,
+		type: mongoose.Schema.Types.Mixed, // Allow both Number and String for "TBD"
 		default: 0,
-		min: [0, 'Shipping cost cannot be negative']
+		validate: {
+			validator: function(value) {
+				// Allow numbers >= 0 or the string "TBD"
+				return (typeof value === 'number' && value >= 0) || value === 'TBD';
+			},
+			message: 'Shipping cost must be a non-negative number or "TBD"'
+		}
 	},
 	taxAmount: {
 		type: Number,
@@ -123,9 +129,30 @@ const OrderSchema = new mongoose.Schema({
 		min: [0, 'Discount amount cannot be negative']
 	},
 	totalAmount: {
-		type: Number,
+		type: mongoose.Schema.Types.Mixed, // Allow both Number and String for "TBD"
 		required: true,
-		min: [0, 'Total amount cannot be negative']
+		validate: {
+			validator: function(value) {
+				// Allow numbers >= 0 or the string "TBD"
+				return (typeof value === 'number' && value >= 0) || value === 'TBD';
+			},
+			message: 'Total amount must be a non-negative number or "TBD"'
+		}
+	},
+	// New field to track if delivery fee is pending calculation
+	deliveryFeePending: {
+		type: Boolean,
+		default: false
+	},
+	// Actual delivery fee once calculated
+	calculatedDeliveryFee: {
+		type: Number,
+		min: [0, 'Calculated delivery fee cannot be negative']
+	},
+	// Final total once delivery fee is calculated
+	finalTotalAmount: {
+		type: Number,
+		min: [0, 'Final total amount cannot be negative']
 	},
 	notes: {
 		type: String,
@@ -174,6 +201,7 @@ const OrderSchema = new mongoose.Schema({
 // Indexes
 OrderSchema.index({ createdAt: -1 });
 OrderSchema.index({ deliveryDate: 1 });
+OrderSchema.index({ deliveryFeePending: 1 });
 
 // Virtual for client data
 OrderSchema.virtual('client', {
@@ -211,13 +239,31 @@ OrderSchema.pre('save', function(next) {
 			this.subtotal = this.items.reduce((sum, item) => sum + item.totalPrice, 0);
 		}
 
-		// Ensure numeric values are set
-		this.shippingCost = this.shippingCost || 0;
+		// Handle shipping cost and total amount logic
+		if (this.shippingMethod === 'delivery') {
+			// For delivery orders, check if shipping cost is provided
+			if (this.shippingCost === 'TBD' || this.shippingCost === undefined) {
+				this.shippingCost = 'TBD';
+				this.totalAmount = 'TBD';
+				this.deliveryFeePending = true;
+			} else if (typeof this.shippingCost === 'number') {
+				// Shipping cost is provided, calculate total
+				this.deliveryFeePending = false;
+				this.calculatedDeliveryFee = this.shippingCost;
+				this.totalAmount = this.subtotal + this.shippingCost + (this.taxAmount || 0) - (this.discountAmount || 0);
+				this.finalTotalAmount = this.totalAmount;
+			}
+		} else {
+			// For pickup orders, no shipping cost
+			this.shippingCost = 0;
+			this.deliveryFeePending = false;
+			this.totalAmount = this.subtotal + (this.taxAmount || 0) - (this.discountAmount || 0);
+			this.finalTotalAmount = this.totalAmount;
+		}
+
+		// Ensure numeric values are set for calculation fields
 		this.taxAmount = this.taxAmount || 0;
 		this.discountAmount = this.discountAmount || 0;
-
-		// Calculate total amount
-		this.totalAmount = this.subtotal + this.shippingCost + this.taxAmount - this.discountAmount;
 
 		// Add to status history if status changed or if this is new document
 		if (this.isModified('status') || this.isNew) {
@@ -282,6 +328,50 @@ OrderSchema.methods.setDeliveryDate = function(date, timeSlot = '') {
 };
 
 /**
+ * Update delivery fee and calculate final totals
+ * @param {number} deliveryFee - Calculated delivery fee
+ */
+OrderSchema.methods.updateDeliveryFee = function(deliveryFee) {
+	if (typeof deliveryFee !== 'number' || deliveryFee < 0) {
+		throw new Error('Delivery fee must be a non-negative number');
+	}
+
+	this.shippingCost = deliveryFee;
+	this.calculatedDeliveryFee = deliveryFee;
+	this.deliveryFeePending = false;
+
+	// Recalculate total amount
+	this.totalAmount = this.subtotal + deliveryFee + (this.taxAmount || 0) - (this.discountAmount || 0);
+	this.finalTotalAmount = this.totalAmount;
+
+	// Add to status history
+	this.statusHistory.push({
+		status: this.status,
+		timestamp: new Date(),
+		note: `Delivery fee updated: ₦${deliveryFee.toLocaleString()}`
+	});
+};
+
+/**
+ * Check if order has pending delivery fee calculation
+ * @returns {boolean} True if delivery fee is pending
+ */
+OrderSchema.methods.hasDeliveryFeePending = function() {
+	return this.deliveryFeePending === true;
+};
+
+/**
+ * Get display total (handles TBD case)
+ * @returns {string|number} Display total
+ */
+OrderSchema.methods.getDisplayTotal = function() {
+	if (this.deliveryFeePending || this.totalAmount === 'TBD') {
+		return `₦${this.subtotal.toLocaleString()} + delivery fee`;
+	}
+	return typeof this.totalAmount === 'number' ? this.totalAmount : 0;
+};
+
+/**
  * Calculate order metrics
  * @returns {Object} Order metrics
  */
@@ -297,7 +387,9 @@ OrderSchema.methods.getMetrics = function() {
 		uniqueProductsCount,
 		subtotal: this.subtotal,
 		shippingCost: this.shippingCost,
-		totalAmount: this.totalAmount
+		totalAmount: this.totalAmount,
+		deliveryFeePending: this.deliveryFeePending,
+		finalTotalAmount: this.finalTotalAmount
 	};
 };
 

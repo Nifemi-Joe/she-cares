@@ -96,11 +96,11 @@ const verifyToken = async (req, res, next) => {
 
 		// Verify token
 		const decoded = jwt.verify(token, config.jwtSecret);
-		console.log('Decoded token:', decoded);
+		// console.log('Decoded token:', decoded);
 
 		// Check if user exists and is active
 		const user = await userRepository.findById(decoded.id);
-		console.log('Found user:', user);
+		// console.log('Found user:', user);
 
 		if (!user) {
 			throw new AuthenticationError('User not found');

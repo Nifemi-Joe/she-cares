@@ -6,7 +6,7 @@ const InvoiceService = require('./invoice.service');
 /**
  * @class OrderService
  * @description Service layer for order operations
- * @since v1.0.0 (2015)
+ * @since v1.0.0 (2023)
  * @author SheCares Development Team
  */
 class OrderService {
@@ -125,11 +125,6 @@ class OrderService {
 			// Check if client exists in both User and Client schemas
 			await this.validateClientExists(orderData.clientId);
 
-			// Create order ID if not provided
-			if (!orderData.id) {
-				orderData.id = `order_${Date.now()}`;
-			}
-
 			// Generate order number if not provided
 			if (!orderData.orderNumber) {
 				orderData.orderNumber = await this.generateOrderNumber();
@@ -138,37 +133,200 @@ class OrderService {
 			// Validate products and calculate initial totals
 			await this.validateOrderItems(orderData.items);
 
-			// Create order domain model
-			const Order = require('../domain/models/order.model');
-			const order = new Order(orderData);
+			// Process order data for delivery fee logic
+			const processedOrderData = this.processOrderDataForDelivery(orderData);
 
-			// Recalculate totals to ensure accuracy
-			order.recalculateTotals();
-
-			// Save to database
-			const savedOrder = await this.orderRepository.create(order.toJSON());
+			// Create order using repository (let schema handle the pre-save logic)
+			const savedOrder = await this.orderRepository.create(processedOrderData);
 
 			// Get client information for emails
 			const clientInfo = await this.getClientInfo(savedOrder.clientId);
-			console.log(clientInfo);
 
-			// Create invoice for the order
-			const invoice = await this.createOrderInvoice(savedOrder, clientInfo);
+			// Create invoice for the order (only if total amount is not TBD)
+			let invoice = null;
+			if (savedOrder.totalAmount !== 'TBD') {
+				invoice = await this.createOrderInvoice(savedOrder, clientInfo);
+
+				// Update order with invoice ID
+				if (invoice) {
+					await this.orderRepository.update(savedOrder._id, { invoiceId: invoice._id });
+					savedOrder.invoiceId = invoice._id;
+				}
+			}
 
 			// Send email notifications
 			await this.sendOrderCreatedEmails(savedOrder, clientInfo, invoice);
 
 			// Dispatch event
 			this.eventDispatcher.dispatch('order:created', {
-				orderId: savedOrder.id,
+				orderId: savedOrder._id,
 				clientId: savedOrder.clientId,
-				total: savedOrder.total,
+				total: savedOrder.totalAmount,
+				deliveryFeePending: savedOrder.deliveryFeePending,
 				timestamp: new Date()
 			});
 
 			return savedOrder;
 		} catch (error) {
 			this.logger.error(`Error creating order: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Process order data for delivery fee logic
+	 * @param {Object} orderData - Raw order data
+	 * @returns {Object} Processed order data
+	 * @private
+	 */
+	processOrderDataForDelivery(orderData) {
+		const processedData = { ...orderData };
+
+		// Calculate subtotal if not provided
+		if (!processedData.subtotal) {
+			processedData.subtotal = processedData.items.reduce((sum, item) => {
+				return sum + (item.totalPrice || (item.quantity * item.price));
+			}, 0);
+		}
+
+		// Handle delivery fee logic
+		if (processedData.shippingMethod === 'delivery') {
+			// For all delivery orders, set delivery fee as pending
+			processedData.shippingCost = 'TBD';
+			processedData.totalAmount = 'TBD';
+			processedData.deliveryFeePending = true;
+
+			// Add appropriate notes
+			if (!processedData.deliveryNotes) {
+				processedData.deliveryNotes = 'Delivery fee to be calculated per location using third-party service';
+			}
+
+			// Add to status history
+			if (!processedData.statusHistory) {
+				processedData.statusHistory = [];
+			}
+			processedData.statusHistory.push({
+				status: processedData.status || 'pending',
+				timestamp: new Date(),
+				note: 'Order created - delivery fee pending location calculation'
+			});
+		} else {
+			// For pickup orders
+			processedData.shippingCost = 0;
+			processedData.deliveryFeePending = false;
+			processedData.totalAmount = processedData.subtotal +
+				(processedData.taxAmount || 0) -
+				(processedData.discountAmount || 0);
+			processedData.finalTotalAmount = processedData.totalAmount;
+		}
+
+		// Ensure numeric values are set
+		processedData.taxAmount = processedData.taxAmount || 0;
+		processedData.discountAmount = processedData.discountAmount || 0;
+
+		return processedData;
+	}
+
+	/**
+	 * Update delivery fee for an order
+	 * @param {string} orderId - Order ID
+	 * @param {number} deliveryFee - Calculated delivery fee
+	 * @param {string} deliveryService - Optional delivery service name
+	 * @returns {Promise<Object>} Updated order
+	 * @throws {Error} Validation or database error
+	 */
+	async updateDeliveryFee(orderId, deliveryFee, deliveryService = null) {
+		try {
+			// Validate delivery fee
+			if (typeof deliveryFee !== 'number' || deliveryFee < 0) {
+				throw new Error('Delivery fee must be a non-negative number');
+			}
+
+			// Get existing order
+			const existingOrder = await this.orderRepository.findById(orderId);
+			if (!existingOrder) {
+				throw new Error(`Order with ID ${orderId} not found`);
+			}
+
+			// Check if delivery fee is pending
+			if (!existingOrder.deliveryFeePending) {
+				throw new Error('Order delivery fee is not pending calculation');
+			}
+
+			// Calculate new totals
+			const newTotalAmount = existingOrder.subtotal +
+				deliveryFee +
+				(existingOrder.taxAmount || 0) -
+				(existingOrder.discountAmount || 0);
+
+			// Update order
+			const updateData = {
+				shippingCost: deliveryFee,
+				calculatedDeliveryFee: deliveryFee,
+				deliveryFeePending: false,
+				totalAmount: newTotalAmount,
+				finalTotalAmount: newTotalAmount,
+				deliveryService: deliveryService,
+				updatedAt: new Date()
+			};
+
+			// Add to status history
+			const statusNote = deliveryService
+				? `Delivery fee updated: ₦${deliveryFee.toLocaleString()} (${deliveryService})`
+				: `Delivery fee updated: ₦${deliveryFee.toLocaleString()}`;
+
+			updateData['$push'] = {
+				statusHistory: {
+					status: existingOrder.status,
+					timestamp: new Date(),
+					note: statusNote
+				}
+			};
+
+			const updatedOrder = await this.orderRepository.update(orderId, updateData);
+
+			// Create invoice now that total is finalized
+			if (!updatedOrder.invoiceId) {
+				const clientInfo = await this.getClientInfo(updatedOrder.clientId);
+				const invoice = await this.createOrderInvoice(updatedOrder, clientInfo);
+
+				if (invoice) {
+					await this.orderRepository.update(orderId, { invoiceId: invoice._id });
+					updatedOrder.invoiceId = invoice._id;
+
+					// Send updated order email with invoice
+					await this.sendDeliveryFeeUpdatedEmails(updatedOrder, clientInfo, invoice, deliveryFee, deliveryService);
+				}
+			}
+
+			// Dispatch event
+			this.eventDispatcher.dispatch('order:delivery_fee_updated', {
+				orderId: updatedOrder._id,
+				deliveryFee,
+				deliveryService,
+				newTotal: newTotalAmount,
+				timestamp: new Date()
+			});
+
+			return updatedOrder;
+		} catch (error) {
+			this.logger.error(`Error updating delivery fee for order ${orderId}: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get orders with pending delivery fee calculation
+	 * @param {Object} options - Query options
+	 * @returns {Promise<Array>} Orders with pending delivery fee
+	 * @throws {Error} Database error
+	 */
+	async getOrdersWithPendingDeliveryFee(options = {}) {
+		try {
+			const filters = { deliveryFeePending: true };
+			return await this.getOrders(filters, options);
+		} catch (error) {
+			this.logger.error(`Error fetching orders with pending delivery fee: ${error.message}`);
 			throw error;
 		}
 	}
@@ -190,6 +348,35 @@ class OrderService {
 				}
 			});
 
+			// Handle search functionality
+			if (cleanFilters.search) {
+				const searchTerm = cleanFilters.search;
+				delete cleanFilters.search;
+
+				// Create search conditions for multiple fields
+				cleanFilters.$or = [
+					// Search in order number
+					{ orderNumber: { $regex: searchTerm, $options: 'i' } },
+					// Search in contact info name
+					{ 'contactInfo.name': { $regex: searchTerm, $options: 'i' } },
+					// Search in contact info email
+					{ 'contactInfo.email': { $regex: searchTerm, $options: 'i' } },
+					// Search in contact info phone
+					{ 'contactInfo.phone': { $regex: searchTerm, $options: 'i' } },
+					// Search in item names
+					{ 'items.name': { $regex: searchTerm, $options: 'i' } },
+					// Search in notes
+					{ notes: { $regex: searchTerm, $options: 'i' } },
+					// Search in delivery notes
+					{ deliveryNotes: { $regex: searchTerm, $options: 'i' } }
+				];
+
+				// If search term looks like a client ID (ObjectId format), add client ID search
+				if (searchTerm.match(/^[0-9a-fA-F]{24}$/)) {
+					cleanFilters.$or.push({ clientId: searchTerm });
+				}
+			}
+
 			// Handle date range filters
 			if (cleanFilters.createdAfter || cleanFilters.createdBefore) {
 				cleanFilters.createdAt = {};
@@ -205,19 +392,28 @@ class OrderService {
 				}
 			}
 
-			// Handle amount range filters
+			// Handle amount range filters (only for non-TBD orders)
 			if (cleanFilters.minTotal || cleanFilters.maxTotal) {
-				cleanFilters.totalAmount = {};
+				const amountFilter = {};
 
 				if (cleanFilters.minTotal) {
-					cleanFilters.totalAmount.$gte = cleanFilters.minTotal;
+					amountFilter.$gte = cleanFilters.minTotal;
 					delete cleanFilters.minTotal;
 				}
 
 				if (cleanFilters.maxTotal) {
-					cleanFilters.totalAmount.$lte = cleanFilters.maxTotal;
+					amountFilter.$lte = cleanFilters.maxTotal;
 					delete cleanFilters.maxTotal;
 				}
+
+				// Only apply to numeric total amounts
+				if (!cleanFilters.$and) {
+					cleanFilters.$and = [];
+				}
+				cleanFilters.$and.push(
+					{ totalAmount: { $type: 'number' } },
+					{ totalAmount: amountFilter }
+				);
 			}
 
 			// Set default options
@@ -320,8 +516,21 @@ class OrderService {
 			}
 
 			// Prevent changing client
-			if (updateData.clientId && updateData.clientId !== existingOrder.clientId) {
+			if (updateData.clientId && updateData.clientId !== existingOrder.clientId.toString()) {
 				throw new Error('Cannot change order client');
+			}
+
+			// Handle status changes
+			if (updateData.status && updateData.status !== existingOrder.status) {
+				updateData['$push'] = {
+					statusHistory: {
+						status: updateData.status,
+						timestamp: new Date(),
+						note: updateData.statusNote || 'Status updated',
+						updatedBy: updateData.updatedBy
+					}
+				};
+				delete updateData.statusNote;
 			}
 
 			// Update timestamp
@@ -332,8 +541,8 @@ class OrderService {
 
 			// Dispatch event
 			this.eventDispatcher.dispatch('order:updated', {
-				orderId: updatedOrder.id,
-				updatedFields: Object.keys(updateData),
+				orderId: updatedOrder._id,
+				updatedFields: Object.keys(updateData).filter(key => key !== '$push'),
 				timestamp: new Date()
 			});
 
@@ -371,7 +580,17 @@ class OrderService {
 	 */
 	async getOrderStats(filters = {}) {
 		try {
-			return await this.orderRepository.getOrderStats(filters);
+			const stats = await this.orderRepository.getOrderStats(filters);
+
+			// Add delivery fee pending stats
+			const pendingDeliveryFeeCount = await this.orderRepository.count({
+				deliveryFeePending: true,
+				...filters
+			});
+
+			stats.pendingDeliveryFee = pendingDeliveryFeeCount;
+
+			return stats;
 		} catch (error) {
 			this.logger.error(`Error getting order statistics: ${error.message}`);
 			throw error;
@@ -403,7 +622,7 @@ class OrderService {
 	 * @returns {Promise<Object>} Sales data
 	 * @throws {Error} Database error
 	 */
-	async getSalesData(period = '30d') {
+	async getSalesData(period = '1y') {
 		try {
 			// Calculate date range based on period
 			const endDate = new Date();
@@ -426,7 +645,7 @@ class OrderService {
 					startDate.setDate(endDate.getDate() - 30);
 			}
 
-			// Get orders in the specified period
+			// Get orders in the specified period (exclude TBD amounts)
 			const orders = await this.getOrders({
 				createdAfter: startDate,
 				createdBefore: endDate
@@ -435,14 +654,21 @@ class OrderService {
 				sort: { createdAt: 1 }
 			});
 
+			// Filter out orders with TBD amounts for sales calculations
+			const completedOrders = orders.data.filter(order =>
+				typeof order.totalAmount === 'number' && !order.deliveryFeePending
+			);
+
 			// Process data for charts
-			const salesData = this._processSalesDataForChart(orders.data, period);
+			const salesData = this._processSalesDataForChart(completedOrders, period);
 
 			return {
 				period,
 				data: salesData,
-				totalSales: orders.data.reduce((sum, order) => sum + (order.totalAmount || order.total || 0), 0),
-				totalOrders: orders.data.length
+				totalSales: completedOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0),
+				totalOrders: orders.data.length,
+				completedOrders: completedOrders.length,
+				pendingDeliveryFeeOrders: orders.data.filter(order => order.deliveryFeePending).length
 			};
 
 		} catch (error) {
@@ -477,7 +703,7 @@ class OrderService {
 			}
 
 			const data = dataMap.get(key);
-			data.sales += order.totalAmount || order.total || 0;
+			data.sales += order.totalAmount || 0;
 			data.orders += 1;
 		});
 
@@ -531,7 +757,8 @@ class OrderService {
 			const order = await this.updateOrder(orderId, {
 				status: 'cancelled',
 				cancelledAt: new Date(),
-				cancelReason: reason
+				cancelReason: reason,
+				statusNote: `Order cancelled: ${reason}`
 			});
 
 			// Dispatch event
@@ -557,8 +784,13 @@ class OrderService {
 	 */
 	async createOrderInvoice(order, clientInfo) {
 		try {
+			// // Don't create invoice for orders with TBD amounts
+			// if (order.totalAmount === 'TBD' || order.deliveryFeePending) {
+			// 	this.logger.info(`Skipping invoice creation for order ${order.orderNumber} - delivery fee pending`);
+			// 	return null;
+			// }
 			const invoiceData = {
-				orderId: order.id,
+				orderId: order._id,
 				clientId: order.clientId,
 				clientInfo: {
 					name: clientInfo.name,
@@ -568,17 +800,17 @@ class OrderService {
 				},
 				items: order.items.map(item => ({
 					productId: item.productId,
-					name: item.name || item.product?.name,
+					name: item.name,
 					quantity: item.quantity,
-					stockUnit: item.stockUnit || 'piece',
-					unitPrice: item.unitPrice || item.price,
-					totalPrice: item.totalPrice || (item.quantity * (item.unitPrice || item.price))
+					stockUnit: item.unit || 'piece',
+					unitPrice: item.price,
+					totalPrice: item.totalPrice || (item.quantity * item.price)
 				})),
 				subtotal: order.subtotal,
-				tax: order.tax || 0,
-				discount: order.discount || 0,
-				deliveryFee: order.deliveryFee || 0,
-				totalAmount: order.totalAmount || order.total,
+				tax: order.taxAmount || 0,
+				discount: order.discountAmount || 0,
+				deliveryFee: 0,
+				totalAmount: order.subtotal,
 				paymentTerms: order.paymentTerms || 'Payment due within 7 days',
 				notes: order.notes || `Order #${order.orderNumber}`,
 				status: 'pending'
@@ -586,8 +818,9 @@ class OrderService {
 
 			return await InvoiceService.createInvoice(invoiceData);
 		} catch (error) {
-			this.logger.error(`Error creating invoice for order ${order.id}: ${error.message}`);
-			throw error;
+			this.logger.error(`Error creating invoice for order ${order._id}: ${error.message}`);
+			// Return null instead of throwing to not break order creation
+			return null;
 		}
 	}
 
@@ -595,13 +828,17 @@ class OrderService {
 	 * Send order created email notifications
 	 * @param {Object} order - Order object
 	 * @param {Object} clientInfo - Client information
-	 * @param {Object} invoice - Invoice object
+	 * @param {Object} invoice - Invoice object (can be null for TBD orders)
 	 * @private
 	 */
 	async sendOrderCreatedEmails(order, clientInfo, invoice) {
 		try {
-			// Generate invoice PDF
-			const invoicePdf = await InvoiceService.generateInvoicePDF(invoice._id);
+			let invoicePdf = null;
+
+			// Generate invoice PDF only if invoice exists
+			if (invoice) {
+				invoicePdf = await InvoiceService.generateInvoicePDF(invoice._id);
+			}
 
 			// Send email to customer
 			if (clientInfo.email) {
@@ -618,11 +855,41 @@ class OrderService {
 	}
 
 	/**
-	 * Send order email to customer
+	 * Send delivery fee updated email notifications
 	 * @param {Object} order - Order object
 	 * @param {Object} clientInfo - Client information
 	 * @param {Object} invoice - Invoice object
-	 * @param {Buffer} invoicePdf - Invoice PDF buffer
+	 * @param {number} deliveryFee - Updated delivery fee
+	 * @param {string} deliveryService - Delivery service name
+	 * @private
+	 */
+	async sendDeliveryFeeUpdatedEmails(order, clientInfo, invoice, deliveryFee, deliveryService) {
+		try {
+			let invoicePdf = null;
+
+			if (invoice) {
+				invoicePdf = await InvoiceService.generateInvoicePDF(invoice._id);
+			}
+
+			// Send email to customer
+			if (clientInfo.email) {
+				await this.sendDeliveryFeeUpdateEmailToCustomer(order, clientInfo, invoice, invoicePdf, deliveryFee, deliveryService);
+			}
+
+			// Send email to admins
+			await this.sendDeliveryFeeUpdateEmailToAdmins(order, clientInfo, invoice, invoicePdf, deliveryFee, deliveryService);
+
+		} catch (error) {
+			this.logger.error(`Error sending delivery fee update emails: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Send order email to customer
+	 * @param {Object} order - Order object
+	 * @param {Object} clientInfo - Client information
+	 * @param {Object} invoice - Invoice object (can be null)
+	 * @param {Buffer} invoicePdf - Invoice PDF buffer (can be null)
 	 * @private
 	 */
 	async sendOrderEmailToCustomer(order, clientInfo, invoice, invoicePdf) {
@@ -656,8 +923,8 @@ class OrderService {
 	 * Send order email to admins
 	 * @param {Object} order - Order object
 	 * @param {Object} clientInfo - Client information
-	 * @param {Object} invoice - Invoice object
-	 * @param {Buffer} invoicePdf - Invoice PDF buffer
+	 * @param {Object} invoice - Invoice object (can be null)
+	 * @param {Buffer} invoicePdf - Invoice PDF buffer (can be null)
 	 * @private
 	 */
 	async sendOrderEmailToAdmins(order, clientInfo, invoice, invoicePdf) {
@@ -691,22 +958,123 @@ class OrderService {
 	}
 
 	/**
-	 * Generate customer order email template
+	 * Send delivery fee update email to customer
 	 * @param {Object} order - Order object
 	 * @param {Object} clientInfo - Client information
 	 * @param {Object} invoice - Invoice object
+	 * @param {Buffer} invoicePdf - Invoice PDF buffer
+	 * @param {number} deliveryFee - Updated delivery fee
+	 * @param {string} deliveryService - Delivery service name
+	 * @private
+	 */
+	async sendDeliveryFeeUpdateEmailToCustomer(order, clientInfo, invoice, invoicePdf, deliveryFee, deliveryService) {
+		try {
+			const subject = `Delivery Fee Update for Order #${order.orderNumber} - SheCares`;
+			const html = this.generateDeliveryFeeUpdateCustomerEmailTemplate(order, clientInfo, invoice, deliveryFee, deliveryService);
+
+			const attachments = [];
+			if (invoicePdf) {
+				attachments.push({
+					filename: `Updated-Invoice-${invoice.invoiceNumber}.pdf`,
+					content: invoicePdf,
+					contentType: 'application/pdf'
+				});
+			}
+
+			await EmailService.sendEmail({
+				to: clientInfo.email,
+				subject,
+				html,
+				attachments
+			});
+
+			this.logger.info(`Delivery fee update email sent to customer: ${clientInfo.email}`);
+		} catch (error) {
+			this.logger.error(`Error sending delivery fee update email to customer: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Send delivery fee update email to admins
+	 * @param {Object} order - Order object
+	 * @param {Object} clientInfo - Client information
+	 * @param {Object} invoice - Invoice object
+	 * @param {Buffer} invoicePdf - Invoice PDF buffer
+	 * @param {number} deliveryFee - Updated delivery fee
+	 * @param {string} deliveryService - Delivery service name
+	 * @private
+	 */
+	async sendDeliveryFeeUpdateEmailToAdmins(order, clientInfo, invoice, invoicePdf, deliveryFee, deliveryService) {
+		try {
+			const adminEmails = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(',') : ['admin@shecares.com'];
+			const subject = `Delivery Fee Updated for Order #${order.orderNumber} - SheCares`;
+			const html = this.generateDeliveryFeeUpdateAdminEmailTemplate(order, clientInfo, invoice, deliveryFee, deliveryService);
+
+			const attachments = [];
+			if (invoicePdf) {
+				attachments.push({
+					filename: `Updated-Invoice-${invoice.invoiceNumber}.pdf`,
+					content: invoicePdf,
+					contentType: 'application/pdf'
+				});
+			}
+
+			for (const adminEmail of adminEmails) {
+				await EmailService.sendEmail({
+					to: 'nifemijoseph8@gmail.com' || adminEmail.trim(),
+					subject,
+					html,
+					attachments
+				});
+			}
+
+			this.logger.info(`Delivery fee update notification sent to admins: ${adminEmails.join(', ')}`);
+		} catch (error) {
+			this.logger.error(`Error sending delivery fee update email to admins: ${error.message}`);
+		}
+	}
+
+	/**
+	 * Generate customer order email template
+	 * @param {Object} order - Order object
+	 * @param {Object} clientInfo - Client information
+	 * @param {Object} invoice - Invoice object (can be null)
 	 * @returns {string} HTML email template
 	 * @private
 	 */
 	generateCustomerOrderEmailTemplate(order, clientInfo, invoice) {
 		const itemsHtml = order.items.map(item => `
 			<tr>
-				<td style="padding: 10px; border-bottom: 1px solid #eee;">${item.name || item.product?.name}</td>
+				<td style="padding: 10px; border-bottom: 1px solid #eee;">${item.name}</td>
 				<td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
-				<td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">₦${(item.unitPrice || item.price).toLocaleString()}</td>
-				<td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">₦${(item.totalPrice || (item.quantity * (item.unitPrice || item.price))).toLocaleString()}</td>
+				<td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">₦${item.price.toLocaleString()}</td>
+				<td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">₦${item.totalPrice.toLocaleString()}</td>
 			</tr>
 		`).join('');
+
+		const deliveryFeeSection = order.shippingCost === 'TBD'
+			? '<p style="color: #ff9800;">Delivery Fee: <strong>To Be Determined</strong><br><small>We will calculate the delivery fee based on your location and contact you shortly.</small></p>'
+			: `<p>Delivery Fee: ₦${order.shippingCost.toLocaleString()}</p>`;
+
+		const totalSection = order.totalAmount === 'TBD'
+			? `<p style="font-size: 18px; color: #e91e63;"><strong>Total: ₦${order.subtotal.toLocaleString()} + Delivery Fee (TBD)</strong></p>`
+			: `<p style="font-size: 18px; color: #e91e63;"><strong>Total: ₦${order.totalAmount.toLocaleString()}</strong></p>`;
+
+		const invoiceSection = invoice
+			? `<p><strong>Invoice Number:</strong> ${invoice.invoiceNumber}</p>`
+			: '<p><em>Invoice will be generated once delivery fee is calculated.</em></p>';
+
+		const paymentSection = invoice
+			? `<div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+				<h3 style="margin-top: 0; color: #333;">Payment Information</h3>
+				<p>Please find the attached invoice for payment details.</p>
+				<p><strong>Payment Terms:</strong> ${invoice.paymentTerms}</p>
+			</div>`
+			: `<div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+				<h3 style="margin-top: 0; color: #333;">Payment Information</h3>
+				<p>Payment invoice will be sent once delivery fee is calculated and finalized.</p>
+				<p><strong>Current Subtotal:</strong> ₦${order.subtotal.toLocaleString()}</p>
+			</div>`;
 
 		return `
 			<!DOCTYPE html>
@@ -727,7 +1095,7 @@ class OrderService {
 						<p>Thank you for your order! We've received your order and it's being processed.</p>
 						<p><strong>Order Number:</strong> ${order.orderNumber}</p>
 						<p><strong>Order Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
-						<p><strong>Invoice Number:</strong> ${invoice.invoiceNumber}</p>
+						${invoiceSection}
 					</div>
 
 					<div style="margin-bottom: 30px;">
@@ -750,22 +1118,25 @@ class OrderService {
 					<div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
 						<div style="text-align: right;">
 							<p><strong>Subtotal: ₦${order.subtotal.toLocaleString()}</strong></p>
-							${order.deliveryFee ? `<p>Delivery Fee: ₦${order.deliveryFee.toLocaleString()}</p>` : ''}
-							${order.discount ? `<p>Discount: -₦${order.discount.toLocaleString()}</p>` : ''}
-							${order.tax ? `<p>Tax: ₦${order.tax.toLocaleString()}</p>` : ''}
-							<p style="font-size: 18px; color: #e91e63;"><strong>Total: ₦${(order.totalAmount || order.total).toLocaleString()}</strong></p>
+							${deliveryFeeSection}
+							${order.discountAmount ? `<p>Discount: -₦${order.discountAmount.toLocaleString()}</p>` : ''}
+							${order.taxAmount ? `<p>Tax: ₦${order.taxAmount.toLocaleString()}</p>` : ''}
+							${totalSection}
 						</div>
 					</div>
 
-					${order.deliveryMethod === 'delivery' ? `
+					${order.shippingMethod === 'delivery' ? `
 						<div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
 							<h3 style="margin-top: 0; color: #333;">Delivery Information</h3>
 							<p><strong>Method:</strong> Home Delivery</p>
 							<p><strong>Address:</strong><br>
-								${order.deliveryAddress?.street || ''}<br>
-								${order.deliveryAddress?.city || ''}, ${order.deliveryAddress?.state || ''}<br>
-								${order.deliveryAddress?.country || ''}
+								${order.shippingAddress?.street || ''}<br>
+								${order.shippingAddress?.city || ''}, ${order.shippingAddress?.state || ''}<br>
+								${order.shippingAddress?.country || ''}
 							</p>
+							${order.deliveryFeePending ?
+			'<p style="color: #ff9800;"><strong>Note:</strong> We will calculate delivery fee based on your location and contact you with the final amount.</p>' :
+			''}
 						</div>
 					` : `
 						<div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
@@ -775,11 +1146,7 @@ class OrderService {
 						</div>
 					`}
 
-					<div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-						<h3 style="margin-top: 0; color: #333;">Payment Information</h3>
-						<p>Please find the attached invoice for payment details.</p>
-						<p><strong>Payment Terms:</strong> ${invoice.paymentTerms}</p>
-					</div>
+					${paymentSection}
 
 					<div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
 						<p style="color: #666;">Thank you for choosing SheCares!</p>
@@ -795,19 +1162,35 @@ class OrderService {
 	 * Generate admin order email template
 	 * @param {Object} order - Order object
 	 * @param {Object} clientInfo - Client information
-	 * @param {Object} invoice - Invoice object
+	 * @param {Object} invoice - Invoice object (can be null)
 	 * @returns {string} HTML email template
 	 * @private
 	 */
 	generateAdminOrderEmailTemplate(order, clientInfo, invoice) {
 		const itemsHtml = order.items.map(item => `
 			<tr>
-				<td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name || item.product?.name}</td>
+				<td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name}</td>
 				<td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
-				<td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₦${(item.unitPrice || item.price).toLocaleString()}</td>
-				<td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₦${(item.totalPrice || (item.quantity * (item.unitPrice || item.price))).toLocaleString()}</td>
+				<td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₦${item.price.toLocaleString()}</td>
+				<td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">₦${item.totalPrice.toLocaleString()}</td>
 			</tr>
 		`).join('');
+
+		const deliveryFeeStatus = order.deliveryFeePending
+			? '<span style="color: #ff9800; font-weight: bold;">PENDING CALCULATION</span>'
+			: `₦${order.shippingCost.toLocaleString()}`;
+
+		const totalDisplay = order.totalAmount === 'TBD'
+			? `₦${order.subtotal.toLocaleString()} + Delivery Fee (TBD)`
+			: `₦${order.totalAmount.toLocaleString()}`;
+
+		const actionRequired = order.deliveryFeePending
+			? `<div style="background: #ffebee; padding: 15px; border-radius: 8px; border-left: 4px solid #f44336; margin-bottom: 20px;">
+				<h4 style="margin-top: 0; color: #d32f2f;">⚠️ ACTION REQUIRED</h4>
+				<p><strong>Delivery fee calculation needed for this order.</strong></p>
+				<p>Please calculate delivery fee for: ${order.shippingAddress?.city}, ${order.shippingAddress?.state}</p>
+			</div>`
+			: '';
 
 		return `
 			<!DOCTYPE html>
@@ -823,13 +1206,16 @@ class OrderService {
 						<h2 style="color: #666; margin-top: 0;">New Order Received</h2>
 					</div>
 
+					${actionRequired}
+
 					<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
 						<h3 style="margin-top: 0; color: #333;">Order Information</h3>
 						<p><strong>Order Number:</strong> ${order.orderNumber}</p>
 						<p><strong>Order Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
-						<p><strong>Invoice Number:</strong> ${invoice.invoiceNumber}</p>
-						<p><strong>Total Amount:</strong> ₦${(order.totalAmount || order.total).toLocaleString()}</p>
+						${invoice ? `<p><strong>Invoice Number:</strong> ${invoice.invoiceNumber}</p>` : '<p><em>Invoice pending delivery fee calculation</em></p>'}
+						<p><strong>Total Amount:</strong> ${totalDisplay}</p>
 						<p><strong>Status:</strong> ${order.status}</p>
+						<p><strong>Delivery Fee Status:</strong> ${deliveryFeeStatus}</p>
 					</div>
 
 					<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
@@ -859,22 +1245,24 @@ class OrderService {
 					<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
 						<div style="text-align: right;">
 							<p>Subtotal: ₦${order.subtotal.toLocaleString()}</p>
-							${order.deliveryFee ? `<p>Delivery Fee: ₦${order.deliveryFee.toLocaleString()}</p>` : ''}
-							${order.discount ? `<p>Discount: -₦${order.discount.toLocaleString()}</p>` : ''}
-							${order.tax ? `<p>Tax: ₦${order.tax.toLocaleString()}</p>` : ''}
-							<p style="font-size: 18px; color: #e91e63;"><strong>Total: ₦${(order.totalAmount || order.total).toLocaleString()}</strong></p>
+							<p>Delivery Fee: ${deliveryFeeStatus}</p>
+							${order.discountAmount ? `<p>Discount: -₦${order.discountAmount.toLocaleString()}</p>` : ''}
+							${order.taxAmount ? `<p>Tax: ₦${order.taxAmount.toLocaleString()}</p>` : ''}
+							<p style="font-size: 18px; color: #e91e63;"><strong>Total: ${totalDisplay}</strong></p>
 						</div>
 					</div>
 
-					${order.deliveryMethod === 'delivery' ? `
+					${order.shippingMethod === 'delivery' ? `
 						<div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
 							<h3 style="margin-top: 0; color: #333;">Delivery Details</h3>
 							<p><strong>Method:</strong> Home Delivery</p>
 							<p><strong>Address:</strong><br>
-								${order.deliveryAddress?.street || ''}<br>
-								${order.deliveryAddress?.city || ''}, ${order.deliveryAddress?.state || ''}<br>
-								${order.deliveryAddress?.country || ''}
+								${order.shippingAddress?.street || ''}<br>
+								${order.shippingAddress?.city || ''}, ${order.shippingAddress?.state || ''}<br>
+								${order.shippingAddress?.country || ''}
+								${order.shippingAddress?.postalCode ? `<br>${order.shippingAddress.postalCode}` : ''}
 							</p>
+							${order.deliveryNotes ? `<p><strong>Notes:</strong> ${order.deliveryNotes}</p>` : ''}
 						</div>
 					` : `
 						<div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
@@ -885,7 +1273,10 @@ class OrderService {
 					`}
 
 					<div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-						<p style="color: #666;">Please process this order as soon as possible.</p>
+						${order.deliveryFeePending ?
+			'<p style="color: #d32f2f; font-weight: bold;">⚠️ Please calculate and update delivery fee for this order</p>' :
+			'<p style="color: #666;">Please process this order as soon as possible.</p>'
+		}
 						<p style="color: #666;">Login to admin panel to manage this order.</p>
 					</div>
 				</div>
@@ -894,6 +1285,89 @@ class OrderService {
 		`;
 	}
 
+	/**
+	 * Generate delivery fee update customer email template
+	 * @param {Object} order - Order object
+	 * @param {Object} clientInfo - Client information
+	 * @param {Object} invoice - Invoice object
+	 * @param {number} deliveryFee - Updated delivery fee
+	 * @param {string} deliveryService - Delivery service name
+	 * @returns {string} HTML email template
+	 * @private
+	 */
+	generateDeliveryFeeUpdateCustomerEmailTemplate(order, clientInfo, invoice, deliveryFee, deliveryService) {
+		const serviceInfo = deliveryService ? ` via ${deliveryService}` : '';
+
+		return `
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<meta charset="utf-8">
+				<title>Delivery Fee Update</title>
+			</head>
+			<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+				<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+					<div style="text-align: center; margin-bottom: 30px;">
+						<h1 style="color: #e91e63; margin-bottom: 10px;">SheCares</h1>
+						<h2 style="color: #666; margin-top: 0;">Delivery Fee Update</h2>
+					</div>
+
+					<div style="background: #e8f5e8; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+						<h3 style="margin-top: 0; color: #333;">Good news, ${clientInfo.name}!</h3>
+						<p>We've calculated the delivery fee for your order <strong>#${order.orderNumber}</strong>.</p>
+						<p><strong>Delivery Fee:</strong> ₦${deliveryFee.toLocaleString()}${serviceInfo}</p>
+					</div>
+
+					<div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+						<h3 style="margin-top: 0; color: #333;">Updated Order Summary</h3>
+						<div style="text-align: right;">
+							<p>Subtotal: ₦${order.subtotal.toLocaleString()}</p>
+							<p>Delivery Fee${serviceInfo}: ₦${deliveryFee.toLocaleString()}</p>
+							${order.discountAmount ? `<p>Discount: -₦${order.discountAmount.toLocaleString()}</p>` : ''}
+							${order.taxAmount ? `<p>Tax: ₦${order.taxAmount.toLocaleString()}</p>` : ''}
+							<p style="font-size: 20px; color: #e91e63; border-top: 2px solid #ddd; padding-top: 10px; margin-top: 15px;">
+								<strong>Final Total: ₦${order.totalAmount.toLocaleString()}</strong>
+							</p>
+						</div>
+					</div>
+
+					<div style="background: #f0f8ff; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+						<h3 style="margin-top: 0; color: #333;">Delivery Information</h3>
+						<p><strong>Address:</strong><br>
+							${order.shippingAddress?.street || ''}<br>
+							${order.shippingAddress?.city || ''}, ${order.shippingAddress?.state || ''}<br>
+							${order.shippingAddress?.country || ''}
+						</p>
+						${deliveryService ? `<p><strong>Delivery Service:</strong> ${deliveryService}</p>` : ''}
+					</div>
+
+					<div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+						<h3 style="margin-top: 0; color: #333;">Payment Information</h3>
+						<p>Your updated invoice is attached to this email.</p>
+						<p><strong>Invoice Number:</strong> ${invoice.invoiceNumber}</p>
+						<p><strong>Payment Terms:</strong> ${invoice.paymentTerms}</p>
+					</div>
+
+					<div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+						<p style="color: #666;">Thank you for your patience!</p>
+						<p style="color: #666;">For any questions, please contact us at support@shecares.com</p>
+					</div>
+				</div>
+			</body>
+			</html>
+		`;
+	}
+
+	/**
+	 * Generate delivery fee update admin email template
+	 * @param {Object} order - Order object
+	 * @param {Object} clientInfo - Client information
+	 * @param {Object} invoice - Invoice object
+	 * @param {number} deliveryFee - Updated delivery fee
+	 * @param {string} deliveryService - Delivery service name
+	 * @returns {string} HTML email template
+	 * @private
+	 */
 	/**
 	 * Validate order items and check stock availability
 	 * @param {Array} items - Order items
@@ -928,6 +1402,85 @@ class OrderService {
 			}
 		}
 	}
+	/**
+	 * Generate delivery fee update admin email template (completion)
+	 * @param {Object} order - Order object
+	 * @param {Object} clientInfo - Client information
+	 * @param {Object} invoice - Invoice object
+	 * @param {number} deliveryFee - Updated delivery fee
+	 * @param {string} deliveryService - Delivery service name
+	 * @returns {string} HTML email template
+	 * @private
+	 */
+	generateDeliveryFeeUpdateAdminEmailTemplate(order, clientInfo, invoice, deliveryFee, deliveryService) {
+		const serviceInfo = deliveryService ? ` (${deliveryService})` : '';
+
+		return `
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<meta charset="utf-8">
+			<title>Delivery Fee Updated</title>
+		</head>
+		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+			<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+				<div style="text-align: center; margin-bottom: 30px;">
+					<h1 style="color: #e91e63; margin-bottom: 10px;">SheCares Admin</h1>
+					<h2 style="color: #666; margin-top: 0;">Delivery Fee Updated</h2>
+				</div>
+
+				<div style="background: #e8f5e8; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+					<h3 style="margin-top: 0; color: #333;">✅ Delivery Fee Calculated</h3>
+					<p>Delivery fee has been updated for order <strong>#${order.orderNumber}</strong></p>
+					<p><strong>Delivery Fee:</strong> ₦${deliveryFee.toLocaleString()}${serviceInfo}</p>
+					<p><strong>Final Total:</strong> ₦${order.totalAmount.toLocaleString()}</p>
+				</div>
+
+				<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+					<h3 style="margin-top: 0; color: #333;">Order Information</h3>
+					<p><strong>Order Number:</strong> ${order.orderNumber}</p>
+					<p><strong>Customer:</strong> ${clientInfo.name}</p>
+					<p><strong>Email:</strong> ${clientInfo.email}</p>
+					<p><strong>Invoice Number:</strong> ${invoice.invoiceNumber}</p>
+					<p><strong>Status:</strong> ${order.status}</p>
+				</div>
+
+				<div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+					<h3 style="margin-top: 0; color: #333;">Updated Totals</h3>
+					<div style="text-align: right;">
+						<p>Subtotal: ₦${order.subtotal.toLocaleString()}</p>
+						<p>Delivery Fee${serviceInfo}: ₦${deliveryFee.toLocaleString()}</p>
+						${order.discountAmount ? `<p>Discount: -₦${order.discountAmount.toLocaleString()}</p>` : ''}
+						${order.taxAmount ? `<p>Tax: ₦${order.taxAmount.toLocaleString()}</p>` : ''}
+						<p style="font-size: 18px; color: #e91e63; border-top: 2px solid #ddd; padding-top: 10px; margin-top: 15px;">
+							<strong>Final Total: ₦${order.totalAmount.toLocaleString()}</strong>
+						</p>
+					</div>
+				</div>
+
+				<div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+					<h3 style="margin-top: 0; color: #333;">Delivery Address</h3>
+					<p>
+						${order.shippingAddress?.street || ''}<br>
+						${order.shippingAddress?.city || ''}, ${order.shippingAddress?.state || ''}<br>
+						${order.shippingAddress?.country || ''}
+						${order.shippingAddress?.postalCode ? `<br>${order.shippingAddress.postalCode}` : ''}
+					</p>
+				</div>
+
+				<div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+					<p style="color: #666;">Customer has been notified with updated invoice.</p>
+					<p style="color: #666;">Login to admin panel to track order progress.</p>
+				</div>
+			</div>
+		</body>
+		</html>
+	`;
+	}
+
 }
+
+// Complete the last email template method that was cut off in the document
+
 
 module.exports = OrderService;

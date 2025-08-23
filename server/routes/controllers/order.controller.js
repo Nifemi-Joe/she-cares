@@ -44,7 +44,6 @@ class OrderController {
 	async createOrder(req, res, next) {
 		try {
 			const orderData = req.body;
-			console.log(orderData);
 			const order = await orderService.createOrder(orderData);
 			res.status(201).json({
 				responseCode: "00",
@@ -73,7 +72,9 @@ class OrderController {
 				deliveryMethod: req.query.deliveryMethod,
 				paymentStatus: req.query.paymentStatus,
 				minTotal: req.query.minTotal ? parseFloat(req.query.minTotal) : undefined,
-				maxTotal: req.query.maxTotal ? parseFloat(req.query.maxTotal) : undefined
+				maxTotal: req.query.maxTotal ? parseFloat(req.query.maxTotal) : undefined,
+				// Add search parameter
+				search: req.query.search
 			};
 
 			// Build options object
@@ -568,18 +569,69 @@ class OrderController {
 	async generateInvoice(req, res, next) {
 		try {
 			const { id } = req.params;
+			const { download = 'true' } = req.query; // Query param to control download behavior
+
+			// Get order data
 			const order = await orderService.getOrderById(id);
+			if (!order) {
+				return res.status(404).json({
+					responseCode: "01",
+					responseMessage: "Order not found"
+				});
+			}
+
+			// Get client information
 			const clientInfo = await orderService.getClientInfo(order.clientId);
 
-			// Generate invoice using the service method
-			const invoice = await orderService.createOrderInvoice(order, clientInfo);
+			let invoice;
 
-			res.status(200).json({
-				responseCode: "00",
-				responseMessage: "Completed Successfully",
-				responseData: invoice
-			});
+			// Check if invoice already exists
+			if (order.invoiceId) {
+				// Get existing invoice
+				const InvoiceService = require('../../services/invoice.service');
+				invoice = await InvoiceService.getInvoiceById(order.invoiceId);
+			} else {
+				// Create new invoice for the order
+				invoice = await orderService.createOrderInvoice(order, clientInfo);if (!invoice) {
+					return res.status(400).json({
+						responseCode: "01",
+						responseMessage: "Cannot generate invoice - delivery fee pending or invalid order data"
+					});
+				}
+
+				// Update order with invoice ID
+				await orderService.updateOrder(id, { invoiceId: invoice._id });
+			}
+
+			// If download is requested (default), generate and send PDF
+			if (download === 'true') {
+				const InvoiceService = require('../../services/invoice.service');
+				const downloadResult = await InvoiceService.downloadInvoice(order.invoiceId, {
+					filename: `invoice-${order.orderNumber}.pdf`
+				});
+
+				// Set response headers for file download
+				res.setHeader('Content-Type', downloadResult.contentType);
+				res.setHeader('Content-Disposition', `attachment; filename="${downloadResult.filename}"`);
+				res.setHeader('Content-Length', downloadResult.size);
+				res.setHeader('Cache-Control', 'no-cache');
+
+				// Send the PDF buffer
+				res.send(downloadResult.buffer);
+			} else {
+				// Just return invoice data as JSON
+				res.status(200).json({
+					responseCode: "00",
+					responseMessage: "Invoice generated successfully",
+					responseData: {
+						invoice: invoice,
+						order: order,
+						downloadUrl: `/api/orders/${id}/invoice?download=true`
+					}
+				});
+			}
 		} catch (error) {
+			console.error('Error generating invoice:', error);
 			next(error);
 		}
 	}

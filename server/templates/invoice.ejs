@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= documentType %> - <%= invoiceNumber %></title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header Section */
+        .header {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 30px;
+            position: relative;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .header-left {
+            flex: 1;
+        }
+
+        .company-name {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .company-subtitle {
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 15px;
+        }
+
+        .company-address {
+            font-size: 12px;
+            color: #495057;
+            line-height: 1.3;
+            white-space: pre-line;
+        }
+
+        .header-right {
+            text-align: right;
+            font-size: 12px;
+            color: #495057;
+            line-height: 1.4;
+        }
+
+        .document-type {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2980b9;
+            color: #fff;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Invoice Details */
+        .invoice-details {
+            display: flex;
+            justify-content: space-between;
+            margin: 40px 0 30px 0;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+
+        .details-left, .details-right {
+            flex: 1;
+        }
+
+        .details-right {
+            text-align: right;
+        }
+
+        .detail-label {
+            font-weight: bold;
+            font-size: 12px;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .detail-item {
+            font-size: 11px;
+            margin-bottom: 5px;
+            color: #212529;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #fff;
+            background: #f39c12;
+            text-transform: uppercase;
+        }
+
+        .status-paid { background: #27ae60; }
+        .status-pending { background: #f39c12; }
+        .status-overdue { background: #e74c3c; }
+
+        /* Client Information */
+        .client-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+
+        .bill-to-label {
+            font-size: 14px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 8px;
+        }
+
+        .client-info {
+            font-size: 12px;
+            color: #212529;
+            line-height: 1.4;
+        }
+
+        /* Items Table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .items-table th {
+            background: #495057;
+            color: #fff;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .items-table th.center { text-align: center; }
+        .items-table th.right { text-align: right; }
+
+        .items-table td {
+            padding: 10px 8px;
+            border: 1px solid #dee2e6;
+            font-size: 10px;
+        }
+
+        .items-table td.center { text-align: center; }
+        .items-table td.right { text-align: right; }
+
+        .items-table .item-row:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .items-table .item-row:nth-child(odd) {
+            background: #ffffff;
+        }
+
+        /* Totals Section */
+        .totals-section {
+            float: right;
+            width: 300px;
+            margin-bottom: 20px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 11px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .totals-row.total {
+            background: #3498db;
+            color: #fff;
+            padding: 12px;
+            margin-top: 5px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .totals-label {
+            color: #495057;
+        }
+
+        .totals-amount {
+            font-weight: bold;
+            color: #212529;
+        }
+
+        .totals-row.total .totals-label,
+        .totals-row.total .totals-amount {
+            color: #fff;
+        }
+
+        /* Amount in Words */
+        .amount-words {
+            clear: both;
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+
+        .amount-words-label {
+            font-weight: bold;
+            font-size: 11px;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .amount-words-text {
+            font-size: 11px;
+            color: #212529;
+        }
+
+        /* Payment Information */
+        .payment-section {
+            background: #e8f5e8;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: 1px solid #c3e6c3;
+            width: 350px;
+        }
+
+        .payment-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #155724;
+            margin-bottom: 10px;
+        }
+
+        .payment-details {
+            font-size: 10px;
+            color: #155724;
+            line-height: 1.5;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 30px;
+            background: #2c3e50;
+            color: #fff;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px;
+        }
+
+        .footer-text {
+            font-size: 10px;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .container {
+                max-width: none;
+                width: 100%;
+                padding: 0;
+            }
+        }
+
+        .clearfix {
+            clear: both;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- Header Section -->
+    <div class="header">
+        <div class="header-left">
+            <div class="company-name"><%= businessInfo.name %></div>
+            <div class="company-subtitle">Premium Food & Grocery Services</div>
+            <div class="company-address"><%= businessInfo.address %></div>
+        </div>
+        <div class="header-right">
+            Lagos, Nigeria<br>
+            Phone: <%= businessInfo.phone %><br>
+            Email: <%= businessInfo.email %>
+        </div>
+    </div>
+
+    <div class="document-type"><%= documentType %></div>
+
+    <!-- Invoice Details -->
+    <div class="invoice-details">
+        <div class="details-left">
+            <div class="detail-label">Invoice Details:</div>
+            <div class="detail-item">Invoice #: <%= invoiceNumber %></div>
+            <div class="detail-item">Order ID: <%= orderId %></div>
+            <div class="detail-item">Issue Date: <%= issueDate %></div>
+        </div>
+        <div class="details-right">
+            <% if (dueDate) { %><div class="detail-item">Due Date: <%= dueDate %></div><% } %>
+            <div class="detail-item">
+                Status: <span class="status-badge status-<%= status.toLowerCase() %>"><%= status %></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Client Information -->
+    <div class="client-section">
+        <div class="bill-to-label">Bill To:</div>
+        <div class="client-info">
+            <strong><%= clientInfo.name %></strong><br>
+            <% if (clientInfo.email) { %><%= clientInfo.email %><br><% } %>
+            <% if (clientInfo.phone) { %><%= clientInfo.phone %><br><% } %>
+            <% if (clientInfo.address) { %><%= clientInfo.address %><% } %>
+        </div>
+    </div>
+
+    <!-- Items Table -->
+    <table class="items-table">
+        <thead>
+        <tr>
+            <th>S/N</th>
+            <th>Description</th>
+            <th class="center">Qty</th>
+            <th class="center">Unit Price</th>
+            <th class="right">Amount</th>
+        </tr>
+        </thead>
+        <tbody>
+        <% items.forEach(function(item) { %>
+            <tr class="item-row">
+                <td class="center"><%= item.serialNumber %></td>
+                <td><%= item.name %></td>
+                <td class="center"><%= item.quantity %></td>
+                <td class="center"><%= formatCurrency(item.unitPrice) %></td>
+                <td class="right"><%= formatCurrency(item.totalPrice) %></td>
+            </tr>
+        <% }); %>
+        </tbody>
+    </table>
+
+    <!-- Totals Section -->
+    <div class="totals-section">
+        <div class="totals-row">
+            <span class="totals-label">Subtotal:</span>
+            <span class="totals-amount"><%= formatCurrency(subtotal) %></span>
+        </div>
+        <% if (tax > 0) { %>
+            <div class="totals-row">
+                <span class="totals-label">Tax:</span>
+                <span class="totals-amount"><%= formatCurrency(tax) %></span>
+            </div>
+        <% } %>
+        <% if (deliveryFee > 0) { %>
+            <div class="totals-row">
+                <span class="totals-label">Delivery:</span>
+                <span class="totals-amount"><%= formatCurrency(deliveryFee) %></span>
+            </div>
+        <% } %>
+        <% if (discount > 0) { %>
+            <div class="totals-row">
+                <span class="totals-label">Discount:</span>
+                <span class="totals-amount">-<%= formatCurrency(discount) %></span>
+            </div>
+        <% } %>
+        <div class="totals-row total">
+            <span class="totals-label">TOTAL:</span>
+            <span class="totals-amount"><%= formatCurrency(totalAmount) %></span>
+        </div>
+    </div>
+
+    <div class="clearfix"></div>
+
+    <!-- Amount in Words -->
+    <div class="amount-words">
+        <div class="amount-words-label">Amount in Words:</div>
+        <div class="amount-words-text"><%= amountInWords %></div>
+    </div>
+
+    <!-- Payment Information -->
+    <div class="payment-section">
+        <div class="payment-title">Payment Information</div>
+        <div class="payment-details">
+            Bank: <%= paymentDetails.bankName %><br>
+            Account Name: <%= paymentDetails.accountName %><br>
+            Account Number: <%= paymentDetails.accountNumber %>
+        </div>
+    </div>
+
+    <div class="clearfix"></div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-text">
+            Generated on <%= generatedDate %> | Thank you for your business!
+        </div>
+    </div>
+</div>
+</body>
+</html>

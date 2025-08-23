@@ -2,7 +2,7 @@
 
 /**
  * @class ProductService
- * @description Service layer for product operations
+ * @description Service layer for product operations with fixed search functionality
  * @since v1.0.0 (2015)
  * @author SheCares Development Team
  */
@@ -13,10 +13,12 @@ class ProductService {
 	 * @param {Object} categoryRepository - Category repository for validation
 	 * @param {Object} eventDispatcher - Event dispatcher for domain events
 	 * @param {Object} logger - Logger instance
+	 * @param orderRepository
 	 */
-	constructor(productRepository, categoryRepository, eventDispatcher, logger) {
+	constructor(productRepository, categoryRepository, eventDispatcher, logger, orderRepository) {
 		this.productRepository = productRepository;
 		this.categoryRepository = categoryRepository;
+		this.orderRepository = orderRepository;
 		this.eventDispatcher = eventDispatcher;
 		this.logger = logger;
 	}
@@ -85,19 +87,16 @@ class ProductService {
 	}
 
 	/**
-	 * Get all products with filtering and pagination
+	 * Get all products with filtering and pagination - FIXED SEARCH
 	 * @param {Object} filters - Filter criteria
 	 * @param {Object} options - Query options
 	 * @returns {Promise<Object>} Paginated products
 	 * @throws {Error} Database error
 	 */
-	/**
-	 * OPTIMIZED SERVICE
-	 */
 	async getProducts(filters = {}, options = {}) {
 		try {
 			// Build optimized filter object
-			const filterQuery = this._buildFilterQuery(filters);
+			const filterQuery = await this._buildFilterQuery(filters);
 
 			// Set up optimized query options
 			const queryOptions = {
@@ -126,9 +125,9 @@ class ProductService {
 	}
 
 	/**
-	 * Build optimized filter query
+	 * Build optimized filter query - FIXED SEARCH LOGIC
 	 */
-	_buildFilterQuery(filters) {
+	async _buildFilterQuery(filters) {
 		const filterQuery = {};
 
 		if (filters.categoryId) {
@@ -139,15 +138,33 @@ class ProductService {
 			filterQuery.isAvailable = filters.isAvailable;
 		}
 
-		// Optimized text search with index
-		if (filters.search) {
-			// Use text index if available, otherwise use regex
-			filterQuery.$text = { $search: filters.search };
-			// Fallback to regex if text index not available
-			// filterQuery.$or = [
-			//     { name: { $regex: filters.search, $options: 'i' } },
-			//     { description: { $regex: filters.search, $options: 'i' } }
-			// ];
+		// FIXED: Implement proper search with fallback mechanism
+		if (filters.search && filters.search.trim()) {
+			const searchTerm = filters.search.trim();
+
+			// First, try to check if text index exists
+			try {
+				// Check if we can use text search
+				const hasTextIndex = await this._checkTextIndex();
+
+				if (hasTextIndex) {
+					// Use text index if available
+					filterQuery.$text = { $search: searchTerm };
+				} else {
+					// Fallback to regex search
+					filterQuery.$or = [
+						{ name: { $regex: searchTerm, $options: 'i' } },
+						{ description: { $regex: searchTerm, $options: 'i' } }
+					];
+				}
+			} catch (textSearchError) {
+				// If text search fails, use regex fallback
+				this.logger.warn('Text search failed, using regex fallback:', textSearchError.message);
+				filterQuery.$or = [
+					{ name: { $regex: searchTerm, $options: 'i' } },
+					{ description: { $regex: searchTerm, $options: 'i' } }
+				];
+			}
 		}
 
 		// Optimized price range query
@@ -169,39 +186,67 @@ class ProductService {
 	}
 
 	/**
+	 * Check if text index exists on the collection
+	 */
+	async _checkTextIndex() {
+		try {
+			// Try to get indexes from the collection
+			const indexes = await this.productRepository.collection.indexes();
+			return indexes.some(index =>
+				index.textIndexVersion !== undefined ||
+				Object.values(index.key || {}).includes('text')
+			);
+		} catch (error) {
+			this.logger.warn('Could not check text index:', error.message);
+			return false;
+		}
+	}
+
+	/**
 	 * Get only necessary fields to reduce data transfer
 	 */
 	_getSelectFields() {
-		return 'name description price isAvailable categoryId tags createdAt images slug';
+		return 'name description price isAvailable categoryId tags createdAt images slug stockQuantity';
 	}
 
 	/**
 	 * Determine if aggregation pipeline should be used
 	 */
 	_shouldUseAggregation(filters) {
-		// Use aggregation for complex queries like search scoring
-		return filters.search || (filters.tags && filters.tags.length > 1);
+		// Use aggregation for complex queries like search scoring or multiple tag filtering
+		return (filters.search && filters.search.includes(' ')) || (filters.tags && filters.tags.length > 1);
 	}
 
 	/**
-	 * Get products using aggregation pipeline (for complex queries)
+	 * Get products using aggregation pipeline (for complex queries) - FIXED
 	 */
 	async _getProductsWithAggregation(filterQuery, queryOptions, options) {
-		const pipeline = [
-			{ $match: filterQuery },
-			{
-				$lookup: {
-					from: 'categories',
-					localField: 'categoryId',
-					foreignField: '_id',
-					as: 'categoryId',
-					pipeline: [{ $project: { name: 1, slug: 1 } }]
-				}
-			},
-			{ $unwind: { path: '$categoryId', preserveNullAndEmptyArrays: true } },
-			{ $project: this._getProjectionFields() },
-			{ $sort: queryOptions.sort },
-			{
+		try {
+			const pipeline = [
+				{ $match: filterQuery },
+				{
+					$lookup: {
+						from: 'categories',
+						localField: 'categoryId',
+						foreignField: '_id',
+						as: 'categoryId',
+						pipeline: [{ $project: { name: 1, slug: 1 } }]
+					}
+				},
+				{ $unwind: { path: '$categoryId', preserveNullAndEmptyArrays: true } },
+				// { $project: this._getProjectionFields() }
+			];
+
+			// Add text score for sorting if using text search
+			if (filterQuery.$text) {
+				pipeline[3].$project.score = { $meta: 'textScore' };
+				pipeline.push({ $sort: { score: { $meta: 'textScore' }, ...queryOptions.sort } });
+			} else {
+				pipeline.push({ $sort: queryOptions.sort });
+			}
+
+			// Add pagination with count
+			pipeline.push({
 				$facet: {
 					data: [
 						{ $skip: queryOptions.skip },
@@ -209,44 +254,56 @@ class ProductService {
 					],
 					count: [{ $count: 'total' }]
 				}
-			}
-		];
+			});
 
-		const [result] = await this.productRepository.aggregate(pipeline);
-		const total = result.count[0]?.total || 0;
+			const [result] = await this.productRepository.aggregate(pipeline);
+			const total = result.count[0]?.total || 0;
 
-		return {
-			data: result.data,
-			pagination: {
-				total,
-				page: options.page || 1,
-				limit: options.limit || 10,
-				pages: Math.ceil(total / (options.limit || 10))
-			}
-		};
+			return {
+				data: result.data,
+				pagination: {
+					total,
+					page: options.page || 1,
+					limit: options.limit || 10,
+					pages: Math.ceil(total / (options.limit || 10))
+				}
+			};
+		} catch (error) {
+			this.logger.error('Aggregation query failed:', error.message);
+			// Fallback to simple find
+			return await this._getProductsWithFind(filterQuery, queryOptions, options);
+		}
 	}
 
 	/**
-	 * Get products using find (for simple queries)
+	 * Get products using find (for simple queries) - FIXED
 	 */
 	async _getProductsWithFind(filterQuery, queryOptions, options) {
-		// For simple queries, use separate count query only when needed
-		const needsCount = options.page === 1 || options.page > 1;
+		try {
+			// Add select fields to query options
+			const findOptions = {
+				...queryOptions,
+			};
 
-		const [products, total] = await Promise.all([
-			this.productRepository.find(filterQuery, queryOptions),
-			needsCount ? this.productRepository.count(filterQuery) : Promise.resolve(0)
-		]);
+			// For simple queries, use separate count query
+			const [products, total] = await Promise.all([
+				this.productRepository.find(filterQuery, findOptions),
+				this.productRepository.count(filterQuery)
+			]);
 
-		return {
-			data: products,
-			pagination: {
-				total,
-				page: options.page || 1,
-				limit: options.limit || 10,
-				pages: Math.ceil(total / (options.limit || 10))
-			}
-		};
+			return {
+				data: products,
+				pagination: {
+					total,
+					page: options.page || 1,
+					limit: options.limit || 10,
+					pages: Math.ceil(total / (options.limit || 10))
+				}
+			};
+		} catch (error) {
+			this.logger.error('Find query failed:', error.message);
+			throw error;
+		}
 	}
 
 	/**
@@ -262,18 +319,10 @@ class ProductService {
 			tags: 1,
 			createdAt: 1,
 			images: 1,
-			slug: 1
+			slug: 1,
+			stockQuantity: 1
 		};
 	}
-
-	/**
-	 * Update a product
-	 * @param {string} productId - Product ID
-	 * @param {Object} updateData - Updated product data
-	 * @returns {Promise<Object>} Updated product
-	 * @throws {Error} Not found or database error
-	 */
-	// Fixed updateProduct method for ProductService
 
 	/**
 	 * Update a product
@@ -694,18 +743,317 @@ class ProductService {
 	 */
 	async getTopProducts(limit = 5, filters = {}) {
 		try {
-			// This would typically require order data to determine top selling
-			// For now, we'll return products by stock quantity (most stocked = popular)
-			const filterQuery = { isAvailable: true, ...filters };
+			// First, get sales data from orders using aggregation
+			const salesAnalytics = await this.orderRepository.aggregate([
+				// Match completed orders only
+				{
+					$match: {
+						status: { $in: ['delivered', 'completed'] },
+						// paymentStatus: { $in: ['paid', 'partially_paid'] }
+					}
+				},
+				// Unwind items array to work with individual products
+				{ $unwind: '$items' },
+				// Group by product to calculate sales metrics
+				{
+					$group: {
+						_id: '$items.productId',
+						totalUnitsSold: { $sum: '$items.quantity' },
+						totalRevenue: { $sum: '$items.totalPrice' },
+						orderCount: { $sum: 1 },
+						avgOrderValue: { $avg: '$items.totalPrice' },
+						lastSaleDate: { $max: '$createdAt' }
+					}
+				},
+				// Sort by total units sold (descending)
+				{ $sort: { totalUnitsSold: -1 } },
+				// Limit results
+				{ $limit: limit * 2 } // Get more than needed to filter available products
+			]);
 
-			return await this.productRepository.find(filterQuery, {
-				sort: { stockQuantity: -1 },
-				limit: limit,
+			// Extract product IDs from sales data
+			const productIds = salesAnalytics.map(item => item._id);
+
+			// Build filter query for products
+			const productFilter = {
+				_id: { $in: productIds },
+				isAvailable: true,
+				...filters
+			};
+
+			// Get product details
+			const products = await this.productRepository.find(productFilter, {
 				populate: 'categoryId'
 			});
+
+			// Combine product data with sales analytics
+			const topProducts = products
+				.map(product => {
+					const salesData = salesAnalytics.find(
+						item => item._id.toString() === product._id.toString()
+					);
+
+					return {
+						...product,
+						salesAnalytics: {
+							totalUnitsSold: salesData?.totalUnitsSold || 0,
+							totalRevenue: salesData?.totalRevenue || 0,
+							orderCount: salesData?.orderCount || 0,
+							avgOrderValue: salesData?.avgOrderValue || 0,
+							lastSaleDate: salesData?.lastSaleDate || null,
+							// Calculate additional metrics
+							revenuePerUnit: salesData?.totalRevenue && salesData?.totalUnitsSold
+								? Number((salesData.totalRevenue / salesData.totalUnitsSold).toFixed(2))
+								: 0,
+							salesRank: null // Will be set below
+						}
+					};
+				})
+				.sort((a, b) => b.salesAnalytics.totalUnitsSold - a.salesAnalytics.totalUnitsSold)
+				.slice(0, limit)
+				.map((product, index) => ({
+					...product,
+					salesAnalytics: {
+						...product.salesAnalytics,
+						salesRank: index + 1
+					}
+				}));
+
+			return topProducts;
 		} catch (error) {
 			this.logger.error(`Error fetching top products: ${error.message}`);
 			throw error;
+		}
+	}
+
+	/**
+	 * Get top products by different criteria
+	 * @param {string} criteria - 'revenue', 'units', 'orders'
+	 * @param {number} limit - Number of products to return
+	 * @param {Object} filters - Additional filters
+	 * @returns {Array} Top products sorted by criteria
+	 */
+	async getTopProductsByCriteria(criteria = 'units', limit = 5, filters = {}) {
+		try {
+			let sortField;
+			switch (criteria) {
+				case 'revenue':
+					sortField = { totalRevenue: -1 };
+					break;
+				case 'orders':
+					sortField = { orderCount: -1 };
+					break;
+				default:
+					sortField = { totalUnitsSold: -1 };
+			}
+
+			const salesAnalytics = await this.orderRepository.aggregate([
+				{
+					$match: {
+						status: { $in: ['delivered', 'completed'] },
+						paymentStatus: { $in: ['paid', 'partially_paid'] }
+					}
+				},
+				{ $unwind: '$items' },
+				{
+					$group: {
+						_id: '$items.productId',
+						totalUnitsSold: { $sum: '$items.quantity' },
+						totalRevenue: { $sum: '$items.totalPrice' },
+						orderCount: { $sum: 1 },
+						avgOrderValue: { $avg: '$items.totalPrice' },
+						lastSaleDate: { $max: '$createdAt' }
+					}
+				},
+				{ $sort: sortField },
+				{ $limit: limit * 2 }
+			]);
+
+			const productIds = salesAnalytics.map(item => item._id);
+			const productFilter = {
+				_id: { $in: productIds },
+				isAvailable: true,
+				...filters
+			};
+
+			const products = await this.productRepository.find(productFilter, {
+				populate: 'categoryId'
+			});
+
+			const topProducts = products
+				.map(product => {
+					const salesData = salesAnalytics.find(
+						item => item._id.toString() === product._id.toString()
+					);
+
+					return {
+						...product.toObject(),
+						salesAnalytics: {
+							totalUnitsSold: salesData?.totalUnitsSold || 0,
+							totalRevenue: salesData?.totalRevenue || 0,
+							orderCount: salesData?.orderCount || 0,
+							avgOrderValue: salesData?.avgOrderValue || 0,
+							lastSaleDate: salesData?.lastSaleDate || null,
+							revenuePerUnit: salesData?.totalRevenue && salesData?.totalUnitsSold
+								? Number((salesData.totalRevenue / salesData.totalUnitsSold).toFixed(2))
+								: 0
+						}
+					};
+				})
+				.sort((a, b) => {
+					switch (criteria) {
+						case 'revenue':
+							return b.salesAnalytics.totalRevenue - a.salesAnalytics.totalRevenue;
+						case 'orders':
+							return b.salesAnalytics.orderCount - a.salesAnalytics.orderCount;
+						default:
+							return b.salesAnalytics.totalUnitsSold - a.salesAnalytics.totalUnitsSold;
+					}
+				})
+				.slice(0, limit)
+				.map((product, index) => ({
+					...product,
+					salesAnalytics: {
+						...product.salesAnalytics,
+						salesRank: index + 1
+					}
+				}));
+
+			return topProducts;
+		} catch (error) {
+			this.logger.error(`Error fetching top products by ${criteria}: ${error.message}`);
+			throw error;
+		}
+	}
+
+	/**
+	 * Get product performance analytics for a specific product
+	 * @param {string} productId - Product ID
+	 * @param {Object} dateRange - Date range filter
+	 * @returns {Object} Product performance data
+	 */
+	async getProductPerformance(productId, dateRange = {}) {
+		try {
+			const matchFilter = {
+				'items.productId': new mongoose.Types.ObjectId(productId),
+				status: { $in: ['delivered', 'completed'] },
+				paymentStatus: { $in: ['paid', 'partially_paid'] }
+			};
+
+			// Add date range filter if provided
+			if (dateRange.startDate || dateRange.endDate) {
+				matchFilter.createdAt = {};
+				if (dateRange.startDate) {
+					matchFilter.createdAt.$gte = new Date(dateRange.startDate);
+				}
+				if (dateRange.endDate) {
+					matchFilter.createdAt.$lte = new Date(dateRange.endDate);
+				}
+			}
+
+			const performance = await this.orderRepository.aggregate([
+				{ $match: matchFilter },
+				{ $unwind: '$items' },
+				{
+					$match: {
+						'items.productId': new mongoose.Types.ObjectId(productId)
+					}
+				},
+				{
+					$group: {
+						_id: null,
+						totalUnitsSold: { $sum: '$items.quantity' },
+						totalRevenue: { $sum: '$items.totalPrice' },
+						orderCount: { $sum: 1 },
+						avgOrderValue: { $avg: '$items.totalPrice' },
+						avgUnitsPerOrder: { $avg: '$items.quantity' },
+						firstSaleDate: { $min: '$createdAt' },
+						lastSaleDate: { $max: '$createdAt' },
+						minPrice: { $min: '$items.price' },
+						maxPrice: { $max: '$items.price' },
+						avgPrice: { $avg: '$items.price' }
+					}
+				}
+			]);
+
+			// Get monthly sales trend
+			const monthlySales = await this.orderRepository.aggregate([
+				{ $match: matchFilter },
+				{ $unwind: '$items' },
+				{
+					$match: {
+						'items.productId': new mongoose.Types.ObjectId(productId)
+					}
+				},
+				{
+					$group: {
+						_id: {
+							year: { $year: '$createdAt' },
+							month: { $month: '$createdAt' }
+						},
+						units: { $sum: '$items.quantity' },
+						revenue: { $sum: '$items.totalPrice' },
+						orders: { $sum: 1 }
+					}
+				},
+				{ $sort: { '_id.year': 1, '_id.month': 1 } }
+			]);
+
+			const result = performance[0] || {
+				totalUnitsSold: 0,
+				totalRevenue: 0,
+				orderCount: 0,
+				avgOrderValue: 0,
+				avgUnitsPerOrder: 0,
+				firstSaleDate: null,
+				lastSaleDate: null,
+				minPrice: 0,
+				maxPrice: 0,
+				avgPrice: 0
+			};
+
+			return {
+				...result,
+				revenuePerUnit: result.totalUnitsSold > 0
+					? Number((result.totalRevenue / result.totalUnitsSold).toFixed(2))
+					: 0,
+				monthlySales: monthlySales.map(item => ({
+					year: item._id.year,
+					month: item._id.month,
+					monthName: new Date(item._id.year, item._id.month - 1).toLocaleDateString('en-US', { month: 'long' }),
+					units: item.units,
+					revenue: item.revenue,
+					orders: item.orders
+				}))
+			};
+		} catch (error) {
+			this.logger.error(`Error fetching product performance for ${productId}: ${error.message}`);
+			throw error;
+		}
+	}
+	/**
+	 * Create text index for better search performance
+	 * Call this method during application initialization
+	 */
+	async createTextIndex() {
+		try {
+			await this.productRepository.collection.createIndex({
+				name: 'text',
+				description: 'text'
+			}, {
+				weights: {
+					name: 10,
+					description: 5
+				},
+				name: 'product_text_index'
+			});
+			this.logger.info('Text index created successfully');
+		} catch (error) {
+			if (error.code === 85) { // Index already exists
+				this.logger.info('Text index already exists');
+			} else {
+				this.logger.error('Failed to create text index:', error.message);
+			}
 		}
 	}
 }

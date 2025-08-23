@@ -74,11 +74,16 @@ const InvoiceSchema = new Schema({
 	},
 	orderId: {
 		type: Schema.Types.ObjectId,
-		ref: 'Order'
+		ref: 'Order',
+		sparse: true  // This allows multiple documents with null/undefined orderId
 	},
 	clientId: {
 		type: Schema.Types.ObjectId,
 		ref: 'Client'
+	},
+	signature: {
+		name: {type: String, default: "Folukemi Joseph"},
+		title: {type: String, default: "Kemi Joseph"}
 	},
 	clientInfo: {
 		name: { type: String, required: true },

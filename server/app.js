@@ -1,5 +1,5 @@
 // src/app.js
-
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -37,8 +37,6 @@ const initializeApp = async () => {
 
 	// Connect to database
 	await connectToDatabase();
-	console.log('✅ Database connection established');
-
 	// Apply middleware
 	app.use(helmet()); // Security headers
 	app.use(cors(appConfig.cors)); // CORS configuration

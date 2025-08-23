@@ -20,6 +20,30 @@ router.post(
 );
 
 /**
+ * @api {post} /api/auth/verify-otp Verify OTP after registration
+ * @apiName VerifyOTP
+ * @apiGroup Authentication
+ * @apiPermission public
+ */
+router.post(
+	'/verify-otp',
+	validate(userValidator.verifyOTPSchema),
+	authController.verifyOTP
+);
+
+/**
+ * @api {post} /api/auth/resend-otp Resend OTP
+ * @apiName ResendOTP
+ * @apiGroup Authentication
+ * @apiPermission public
+ */
+router.post(
+	'/resend-otp',
+	validate(userValidator.resendOTPSchema),
+	authController.resendOTP
+);
+
+/**
  * @api {post} /api/auth/login Login user
  * @apiName LoginUser
  * @apiGroup Authentication
