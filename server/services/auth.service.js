@@ -68,7 +68,7 @@ class AuthService {
 		}
 
 		// Check if user is already verified
-		if (user.isVerified) {
+		if (user.isActive) {
 			throw new ValidationError('User is already verified');
 		}
 
@@ -116,7 +116,7 @@ class AuthService {
 		}
 
 		// Check if user is already verified
-		if (user.isVerified) {
+		if (user.isActive) {
 			throw new ValidationError('User is already verified');
 		}
 
@@ -151,14 +151,14 @@ class AuthService {
 		}
 
 		// Check if user is verified
-		if (!user.isVerified) {
+		if (!user.isActive) {
 			throw new AuthenticationError('Please verify your account first. Check your email for OTP.');
 		}
-
-		// Check if user is active
-		if (!user.isActive) {
-			throw new AuthenticationError('Account is deactivated');
-		}
+		//
+		// // Check if user is active
+		// if (!user.isActive) {
+		// 	throw new AuthenticationError('Account is deactivated');
+		// }
 
 		// Verify password
 		const isPasswordValid = await bcrypt.compare(password, user.password);
